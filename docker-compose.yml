@@ -1,0 +1,17 @@
+# DynamoDB Local — a real DynamoDB engine (same API as AWS) running in a container
+# on your machine. No AWS account, no billing, no network required.
+#
+# Learn more: https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html
+#
+# Run it:   docker compose up -d
+# Stop it:  docker compose down            (add -v to also wipe stored data)
+# Admin UI: https://github.com/aaronshaf/dynamodb-admin (optional, `npx dynamodb-admin`)
+services:
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: specmem-dynamodb-local
+    ports:
+      - "8000:8000"
+    # -inMemory: don't persist to disk, so `docker compose down -v` gives you a clean slate.
+    # Drop -inMemory and add a -dbPath if you want data to survive container restarts.
+    command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
