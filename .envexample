@@ -1,0 +1,10 @@
+#.env example for ISPY_specmem project
+# This file contains environment variables for the ISPY_specmem project.
+
+#Supbase URL for the API
+SUPABASE_URL=https://your-supabase-url.supabase.co
+#Supabase API key for authentication
+SUPABASE_API_KEY=your-supabase-api-key
+
+#Anthropic API key for accessing the Anthropic AI service
+ANTHROPIC_API_KEY=your-anthropic-api-key
