@@ -64,7 +64,7 @@ question (question marker, or "?" at end, or default):
 - "what's on my schedule Friday?"                                   :   question   ("?" and leading "what" both fire)
 
 - "when is my dentist appointment"                                  :   question
-- "my favorite is late-night coding"                                :   question   (no habit verb from the list, falls through)
+- "my favorite is late-night coding"                                :   question - but should be save_preference   (no habit verb from the list, falls through)
 
 4. 2 TESTS
 UNCERTAIN (no signal, escalate to Tier-2):
@@ -135,6 +135,8 @@ similar to the question.
 
 :  must NOT be stored as the user's preference (Tier-2 catches it
    as third-person). If it never becomes a semantic memory, it never pollutes recall.
+   might save because a sister preference might be smantic memory as well hoenstly
+
 
 3. Context:
 "I prefer studying at night" saved last week, then:
