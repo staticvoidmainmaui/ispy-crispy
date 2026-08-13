@@ -9,7 +9,7 @@
 services:
   dynamodb-local:
     image: amazon/dynamodb-local:latest
-    container_name: specmem-dynamodb-local
+    container_name: ispy-crispy-dynamodb-local
     ports:
       - "8000:8000"
     # -inMemory: don't persist to disk, so `docker compose down -v` gives you a clean slate.
