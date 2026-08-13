@@ -43,3 +43,5 @@ export async function query(text, params) {
     throw err;  // re-throw — the caller decides the response, same as recall.mjs
   }
 }
+
+export const toVectorLiteral = (v) => `[${v.join(",")}]`;
