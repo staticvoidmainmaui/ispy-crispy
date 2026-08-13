@@ -5,6 +5,7 @@
 
 import { pipeline } from "@xenova/transformers";
 import { createClient } from "@supabase/supabase-js";
+import { getEmbedding } from "./embeddings.mjs";
 
 
 // TODO: move these to env vars before this is anything but a demo.
@@ -12,15 +13,7 @@ const supabaseUrl = "https://ovecipojbgnmptuyguor.supabase.co";
 const supabaseAnonKey = "sb_publishable_TF5VplQM5Flb6zhXZz47Xw_8fC4Pzc4";
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Local MiniLM (Xenova) = text -> 384 numbers. Loaded once, reused (that's the `if`).
-let embedder;
-async function getEmbedding(text) {
-  if (!embedder) {
-    embedder = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
-  }
-  const output = await embedder(text, { pooling: "mean", normalize: true });
-  return Array.from(output.data);
-}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // THE CLASSIFICATION DECISION — episodic vs semantic.

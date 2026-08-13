@@ -10,19 +10,13 @@
 import { pipeline } from "@xenova/transformers";
 import { createClient } from "@supabase/supabase-js";
 import { hydrateEvents } from "../events/eventsTable.mjs";
+import { getEmbedding } from "./embeddings.mjs";
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_API_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-let embedder;
-async function getEmbedding(text) {
-  if (!embedder) {
-    embedder = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
-  }
-  const output = await embedder(text, { pooling: "mean", normalize: true });
-  return Array.from(output.data);
-}
+
 
 // ─── recall(query, { userId, topK, memoryType }) ─────────────────────────────────
 // Returns the topK memories closest in MEANING to `query`, for one user, RANKED by the
