@@ -5,11 +5,18 @@
 
 ## The idea
 
-Hybrid search runs two retrievers — dense (vector/cosine) and lexical (Postgres
-full-text, `ts_rank_cd`) — and fuses their results. The problem: the two score
-scales are incomparable (cosine ~0–1, `ts_rank_cd` ~0–10+). **Reciprocal Rank
-Fusion (RRF)** solves it by throwing away both scores and keeping only *rank
-position*, then scoring each doc as `1/(k + rank)`.
+Hybrid search runs two retrievers — 
+
+* dense (vector/cosine) 
+and 
+* lexical (Postgres full-text, `ts_rank_cd`) — 
+
+and fuses their results. The problem: the two score
+scales are incomparable (cosine ~0–1, `ts_rank_cd` ~0–10+). 
+
+**Reciprocal Rank Fusion (RRF)** 
+
+solves it by throwing away both scores and keeping only *rank position*, then scoring each doc as `1/(k + rank)`.
 
 ## Concrete walk-through (`rrf_k = 60`)
 
