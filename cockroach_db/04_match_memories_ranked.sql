@@ -36,6 +36,7 @@ as $$
     where m.embedding is not null
       and (p_user_id     is null or m.user_id     = p_user_id)
       and (p_memory_type is null or m.memory_type = p_memory_type) -- prefilter fires if not short circuit on specified recall
+      and m.metadata->>'superseded_by' is null -- dont recall superseded rows
   ),
   signals as (
     select
