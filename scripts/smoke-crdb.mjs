@@ -32,7 +32,7 @@ try {
   console.log(`  clock skew   ${Math.abs(Date.now() - r.server_time.getTime())}ms vs local`);
 } catch (err) {
   // Label the failure by subsystem, per the convention in handleMessage.mjs:331.
-  console.error("❌ CONNECTION failed (pg/CockroachDB Cloud):", err.message);
+  console.error("ERR : CONNECTION failed (pg/CockroachDB Cloud):", err.message);
   console.error("\n   code:", err.code ?? "(none)");
   console.error(`
    Reading the error:

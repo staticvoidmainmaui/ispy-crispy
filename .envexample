@@ -11,3 +11,11 @@ SUPABASE_API_KEY=your-supabase-api-key
 
 # ── Anthropic ──
 ANTHROPIC_API_KEY=your-anthropic-api-key
+
+# ── AWS DynamoDB──
+AWS_REGION=us-east-1
+EMBEDDING_PROVIDER=titan
+EVENTS_TABLE_NAME=events
+
+# LOCAL DEV ONLY. Set = DynamoDB Local. Unset = real AWS DynamoDB.
+DYNAMODB_ENDPOINT=http://localhost:8000
