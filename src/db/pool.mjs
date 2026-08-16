@@ -29,7 +29,7 @@ pool.on("error", (err, client) => {
     console.error("pool() : Unexpected ERROR on idle client", err);
 });
 
-// Exported QUuery function: a thin wrapper over pool.query() that adds timing.
+// Exported Query function: a thin wrapper over pool.query() that adds timing.
 // pool keeps its own untouched .query().
 export async function query(text, params) {
   const start = Date.now();

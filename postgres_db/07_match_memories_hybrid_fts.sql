@@ -50,7 +50,6 @@ as $$
   -- tokenize the query once (reuse in the FTS step)
   q as (
     select websearch_to_tsquery('english', query_text) as query
-    --confused on this one why tokenize if we have content_tsv from memories m
   ),
 
   -- dense half: cosine distance -> rank
@@ -71,8 +70,8 @@ as $$
   ),
   --ts_rank_cd will happily score non-matches as 0, so the @@ filter is what keeps the sparse list to actual lexical hits.
  
-  -- fuse: RRF over the two ranked lists (full outer join)
-  -- RRF (Reciprocal Rank Fusion) formula: 1/(k + rank1) + 1/(k + rank2)
+  -- 
+  -- fuse completion : RRF (Reciprocal Rank Fusion) formula: 1/(k + rank1) + 1/(k + rank2)
   fused as (
     select
       COALESCE(d.id, f.id) as id,

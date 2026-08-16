@@ -62,15 +62,16 @@ export async function writeMemory(content, { userId, memoryType, importance = "m
 
   // --- Upsert - converted from .upsert function into the raw INSERT ... on CONFLICT it translates to 
   //upsert: to branch out to something on a collision rather than crashing on conflict insert
-  const { data, error } = await pool.query(
-    `insert into memories(id,user_id, content,embedding, memory_type, importance, created_at) ',
-    values (coalesce($1::uuid), gen_random_uuid()), $2, #3, #4::vector(1024), $5, $6,
-            coalesce($7::timestamptz, now()))
-    on conflict (user_id, content_hash) do nothing 
-    returning id, memory_type`,
-    [id ?? null, userId, content, toVectorLiteral(embedding), type, importance, createdAt ?? 
-    null],
-  )
+  const { rows } = await pool.query(
+    `insert into memories (id, user_id, content, embedding, memory_type, importance, created_at)
+     values (coalesce($1::uuid, gen_random_uuid()), $2, $3, $4::vector(1024), $5, $6,
+             coalesce($7::timestamptz, now()))
+     on conflict (user_id, content_hash) do nothing
+     returning id, memory_type`,
+    [id ?? null, userId, content, toVectorLiteral(embedding), type, importance, createdAt ?? null],
+  );
+
+  const data = rows[0] ?? null;
   //if error - writememory error is handled vertically
 
   if (!data) { //if no data then skipped duplicate, so log and return null

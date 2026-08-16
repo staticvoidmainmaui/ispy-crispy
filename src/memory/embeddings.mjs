@@ -2,7 +2,6 @@
 // One getEmbedding(), model chosen by config. Replaces the copies in
 // writeMemory.mjs:17 and recall.mjs:19.
 
-import { pipeline } from "@xenova/transformers";
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 
 // ── Config ───────────────────────────────────────────────────────────────────
@@ -15,6 +14,8 @@ const TITAN_DIMS = 1024;
 let embedder;
 
 async function embedXenova(text) {
+  //lazy import
+  const { pipeline } = await import("@xenova/transformers");
   if (!embedder) {
     embedder = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
   }

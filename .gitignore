@@ -4,6 +4,10 @@ node_modules/
 *.log
 personal/
 .claude/
+CLAUDE.md
+
+#pre-port
+postgres_db/
 
 
 #docs
@@ -12,3 +16,4 @@ mydocs/
 
 #references
 later_agent_app/
+CRDB_hackathon/
