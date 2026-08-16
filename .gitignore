@@ -9,6 +9,8 @@ CLAUDE.md
 #pre-port
 postgres_db/
 
+#temporary
+scripts/
 
 #docs
 docs/guide
