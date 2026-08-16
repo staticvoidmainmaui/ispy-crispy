@@ -9,6 +9,7 @@
 
 import express from "express";
 import { handleMessage } from "./chat/handleMessage.mjs";
+import { pool } from "./db/pool.mjs";
 //Dev user test
 import { DEV_USER } from "./config.mjs";
 
@@ -23,19 +24,24 @@ app.use(express.json()); // parse JSON request bodies into req.body
 
 const PORT = process.env.PORT ?? 3000; //use env PORT or default to 3000
 
+// ─── GET /health — liveness ──────────────────────────────────────────────────
+app.get("/health", (_req, res) => res.json({ status: "ok" }));
+
+// ─── GET /ready — readiness ──────────────────────────────────────────────────
+app.get("/ready", async (_req, res) => {
+  try {
+    await pool.query("select 1");
+    return res.json({ status: "ready", db: "ok" });
+  } catch (err) {
+    return res.status(503).json({ status: "degraded", db: err.message });
+  }
+});
+
 // ─── POST /chat ──────────────────────────────────────────────────────────────
 // The one route that drives the whole read path.
+// Pull `message` and `userId` out of req.body. -> Validate them. -> Call handleMessage(message, userId) -> Respond with the reply.
 app.post("/chat", async (req, res) => {
-  // TODO (yours — this is the meaningful part):
-  //   1. Pull `message` and `userId` out of req.body.
   
-  //   2. VALIDATE: what makes a request unusable? (missing message? missing userId?)
-  //      Decide what a bad request looks like and respond 400 with a clear reason.
-  //      Trade-off: strict validation = clearer errors but more rejections;
-  //      lenient = fewer 400s but garbage can reach the LLM (and cost you tokens).
-  //   3. Call handleMessage(message, userId), await the reply.
-  //   4. Respond with res.json({ reply }).
-
   const { message, userId= DEV_USER, created_at = null } = req.body; //created_at: eval-only backdate for seeding recency tests
 
   if (!message ) {
@@ -58,12 +64,6 @@ app.post("/chat", async (req, res) => {
     console.error("Error in /chat route:  OR EMPTY REPLY ???", error);
     return res.status(500).json({ error: "Internal server error - handleMessage failed" });
   }
-
-
-  //
-  //   Note: handleMessage currently SWALLOWS errors (catch -> returns undefined).
-  //   So decide: do you trust it to always return a string, or guard for undefined
-  //   here and return a 500? That's a real design choice about where errors surface.
 });
 
 app.listen(PORT, () => console.log(`Go Gators listening on http://localhost:${PORT}`));

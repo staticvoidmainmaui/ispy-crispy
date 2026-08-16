@@ -18,19 +18,22 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
-// TODO: move these to env vars before this touches real AWS (same rule as the
-// Supabase keys — see the TODO above the Supabase client in writeMemory.mjs).
+// ── Config ───────────────────────────────────────────────────────────────────
 const REGION = process.env.AWS_REGION ?? "us-east-1";
-const LOCAL_ENDPOINT = process.env.DYNAMODB_ENDPOINT ?? "http://localhost:8000";
+const LOCAL_ENDPOINT = process.env.DYNAMODB_ENDPOINT;
 
-// DynamoDB Local doesn't check credentials, but the SDK still requires *something*
-// shaped like a key pair to construct the client. These are placeholders — they are
-// never sent to a real AWS endpoint, only to your local container.
-const rawClient = new DynamoDBClient({
-  region: REGION,
+// ── Client: local endpoint only when explicitly asked for ────────────────────
+const localConfig = {
   endpoint: LOCAL_ENDPOINT,
   credentials: { accessKeyId: "local", secretAccessKey: "local" },
+};
+
+const rawClient = new DynamoDBClient({
+  region: REGION,
+  ...(LOCAL_ENDPOINT ? localConfig : {}),
 });
+
+export const IS_LOCAL_DYNAMO = Boolean(LOCAL_ENDPOINT);
 
 // Wrap the low-level client so callers deal in plain objects ({ id: "...", title: "..." })
 // instead of DynamoDB's attribute-value wire format.

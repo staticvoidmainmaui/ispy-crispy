@@ -26,7 +26,7 @@ import {
   CreateTableCommand,
   DescribeTableCommand,
 } from "@aws-sdk/client-dynamodb";
-import { docClient, EVENTS_TABLE } from "./dynamoClient.mjs";
+import { docClient, EVENTS_TABLE, IS_LOCAL_DYNAMO } from "./dynamoClient.mjs";
 
 // ─── One-time setup: create the table if it doesn't exist ───────────────────────
 // Real AWS: you'd normally do this once via Terraform/CDK/console, not app code.
@@ -38,6 +38,14 @@ export async function ensureEventsTable() {
     return; // already exists
   } catch (err) {
     if (err.name !== "ResourceNotFoundException") throw err;
+  }
+
+  // Real AWS: the table is infrastructure, not something app code conjures.
+  if (!IS_LOCAL_DYNAMO) {
+    throw new Error(
+      `ensureEventsTable(): table "${EVENTS_TABLE}" does not exist in ${process.env.AWS_REGION ?? "us-east-1"}. ` +
+      `Create it out-of-band; app code only auto-creates against DynamoDB Local.`,
+    );
   }
 
   // TODO 1: define the table's key schema.
