@@ -4,15 +4,22 @@
     "start": "node --env-file=.env src/server.mjs",
     "dev": "node --env-file=.env --watch src/server.mjs",
     "anthropic": "node --env-file=.env src/chat/handleMessage.mjs",
-    "recall": "node --env-file=.env src/memory/recall.mjs"
+    "recall": "node --env-file=.env src/memory/recall.mjs",
+    "smoke:crdb": "node --env-file=.env scripts/smoke-crdb.mjs",
+    "probe:crdb": "node --env-file=.env scripts/probe-crdb-schema.mjs",
+    "schema:crdb": "node --env-file=.env scripts/apply-schema.mjs",
+    "reflect": "node --env-file=.env scripts/run-reflect.mjs",
+    "demo:isolation": "node --env-file=.env scripts/seed-isolation-demo.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1109.0",
     "@aws-sdk/client-dynamodb": "^3.1081.0",
     "@aws-sdk/lib-dynamodb": "^3.1081.0",
     "@supabase/supabase-js": "^2.110.0",
     "@xenova/transformers": "^2.17.2",
     "chrono-node": "^2.9.1",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "pg": "^8.23.0"
   }
 }

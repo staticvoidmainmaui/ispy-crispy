@@ -1,10 +1,13 @@
-#.env example for ISPY_specmem project
-# This file contains environment variables for the ISPY_specmem project.
+# .env example for ispy-crispy project
 
-#Supbase URL for the API
-SUPABASE_URL=https://your-supabase-url.supabase.co
-#Supabase API key for authentication
+# ── CockroachDB (the port target) ──
+# ccloud cluster sql <cluster> --connection-url -u <user>
+# Percent-encode special characters in the password (@ becomes %40).
+DATABASE_URL=postgresql://<user>:<password>@<cluster>.<region>.cockroachlabs.cloud:26257/defaultdb?application_name=ispy-specmem&sslmode=verify-full
+
+# ── Supabase (the port SOURCE ) ──
+SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_API_KEY=your-supabase-api-key
 
-#Anthropic API key for accessing the Anthropic AI service
+# ── Anthropic ──
 ANTHROPIC_API_KEY=your-anthropic-api-key
