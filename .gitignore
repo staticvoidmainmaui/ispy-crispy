@@ -12,10 +12,16 @@ postgres_db/
 #temporary
 scripts/
 
+
 #docs
 docs/guide
 mydocs/
+docs/myscratchpad.md
+docs/toolfeatures.md
 
 #references
 later_agent_app/
 CRDB_hackathon/
+
+# Lambda build output
+dist/
