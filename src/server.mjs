@@ -55,10 +55,14 @@ app.post("/chat", async (req, res) => {
   // alongside the reply. Off by default, so the production response is unchanged.
   const debug = req.query.debug === "1";
 
+  // Deterministic tool failure for the eval. debug=1 only.
+  const ctx = debug ? { forceFail: req.get("x-tools-force-fail") ?? null } : {};
+
   try {
     const trace = {};
-    const reply = await handleMessage(message, userId, debug ? trace : null, created_at);
-    return res.json(debug ? { reply, hits: trace.hits ?? [] } : { reply });
+    const reply = await handleMessage(message, userId, debug ? trace : null, created_at, ctx);
+    // `tools` = which tools ran, with what arguments.
+    return res.json(debug ? { reply, hits: trace.hits ?? [], tools: trace.tools ?? [] } : { reply });
   }
   catch (error) {
     console.error("Error in /chat route:  OR EMPTY REPLY ???", error);

@@ -16,6 +16,7 @@
 # Docs: https://requests.readthedocs.io/en/latest/user/quickstart/
 
 import json
+import re         # toolchain cases assert a reply does NOT match a pattern
 import argparse   # parse --stage so you can score one pipeline stage at a time
 import uuid       # unique per-case userId, so cases can't pollute each other's recall
 from datetime import datetime, timedelta, timezone   # backdate seeded memories for recency tests
@@ -38,7 +39,7 @@ def load_cases(path):
 
 
 # ─── PART 2: run one case against the live server (the "curl") ───────────────
-def run_case(message, user=DEV_USER, debug=False, created_at=None):
+def run_case(message, user=DEV_USER, debug=False, created_at=None, force_fail=None):
     """
     Send one planner message to the running server and return its parsed reply.
 
@@ -56,9 +57,12 @@ def run_case(message, user=DEV_USER, debug=False, created_at=None):
     body = {"message": message, "userId": user}
     if created_at is not None:
         body["created_at"] = created_at   # eval-only: backdate this write (recency tests)
+    # force_fail — deterministic tool failure for the degradation case (debug=1 only).
+    headers = {"X-Tools-Force-Fail": force_fail} if force_fail else None
     resp = requests.post(
         BASE_URL + CHAT_ROUTE + ("?debug=1" if debug else ""),
         json=body,
+        headers=headers,
         timeout=30,
     )
     resp.raise_for_status()   # a 500 from the server should fail loudly, not silently pass
@@ -66,40 +70,7 @@ def run_case(message, user=DEV_USER, debug=False, created_at=None):
 
 
 # ─── PART 3: score one reply against what we expected ────────────────────────
-# THIS IS THE HEART OF THE HARNESS AND THE PART THAT IS YOURS TO WRITE.
-#
-# Remember the wrinkle we found: /chat returns {"reply": <english string>},
-# NOT {"intent": "add_event"}. So the intent never crosses the wire — you must
-# infer whether the right branch fired by reading the reply text.
-#
-# TODO (1) — THE LOAD-BEARING DECISION. Pick how you detect intent from a reply:
-#     Option A (behavioral, no code changes to the server):
-#         Read the reply string and classify which branch produced it, e.g.
-#           - starts with "Booked"        -> add_event fired
-#           - a save_preference ack       -> save_preference fired  (check your server's wording)
-#           - anything else               -> question / recall path
-#         Pro: tests the REAL end-to-end system, server untouched.
-#         Con: brittle — if you reword a reply, the scorer breaks. Couples the
-#              test to phrasing, not behavior.
 
-
-#     Option B (expose intent for testing):
-#         Add an opt-in to /chat (e.g. ?debug=1) that returns {reply, intent},
-#         then score intent == expected["intent"] exactly.
-#         Pro: clean exact-match scoring, robust to reply wording.
-#         Con: you changed the system to make it testable (a real, common
-#              trade-off — "design for testability" — but a choice to make consciously).
-#     Write down WHY you picked one. That reasoning is the portfolio artifact.
-#
-# TODO (2) — Implement the intent stages first. Given `case` and `actual`
-#     (the parsed {"reply": ...}), return True if the reply reflects
-#     case["expected"]["intent"]. Keep it to a few lines.
-#
-# TODO (3) — Later: branch on case["stage"] so this one function can score
-#     "intent" (behavioral/exact), "extract" (structural — some fields exact,
-#     time asserted as not-null NOT as a literal ISO string), "retrieval"
-#     (must_include / must_exclude a memory id), and "ranking" (an ordering:
-#     ranks_higher than). Start with a simple `if case["stage"] == "intent"`.
 
 #HELPERS FOR SCORING
 def extract_eval(case, actual):
@@ -229,6 +200,61 @@ def ranking_eval(case, actual):
     return higher < lower                  # smaller index = nearer the top
 
 
+def toolchain_eval(case, actual):
+    """
+    Tool-chain scoring. actual["tools"] = [{name, input, ok, ms, error?}] from ?debug=1.
+    Asserts WHICH tools ran and WHAT ARGUMENTS they got — the argument is the proof the
+    memory was load-bearing.
+
+    tools_called        — these ran, in this relative order (subset, not exact)
+    tools_absent        — these must NOT have run
+    tool_input_contains — {tool: {field: substring}}
+    tool_ok             — {tool: bool}
+    reply_must_not_match— regex that must NOT match the reply
+    reply_contains_any  — at least one substring appears in the reply
+    """
+    exp = case["expected"]
+    tools = actual.get("tools") or []
+    names = [t.get("name") for t in tools]
+    reply = (actual.get("reply") or "").lower()
+
+    # ordered subset: each expected name appears after the previous one
+    pos = -1
+    for want in exp.get("tools_called", []):
+        try:
+            pos = names.index(want, pos + 1)
+        except ValueError:
+            return False
+
+    for banned in exp.get("tools_absent", []):
+        if banned in names:
+            return False
+
+    for tool, fields in exp.get("tool_input_contains", {}).items():
+        call = next((t for t in tools if t.get("name") == tool), None)
+        if call is None:
+            return False
+        for field, needle in fields.items():
+            got = str((call.get("input") or {}).get(field, "")).lower()
+            if needle.lower() not in got:
+                return False
+
+    for tool, want_ok in exp.get("tool_ok", {}).items():
+        call = next((t for t in tools if t.get("name") == tool), None)
+        if call is None or bool(call.get("ok")) != want_ok:
+            return False
+
+    pattern = exp.get("reply_must_not_match")
+    if pattern and re.search(pattern, actual.get("reply") or ""):
+        return False
+
+    any_of = exp.get("reply_contains_any")
+    if any_of and not any(s.lower() in reply for s in any_of):
+        return False
+
+    return True
+
+
 def score(case, actual):
     """Return True if `actual` satisfies case["expected"]. Fill this in."""
     if case["stage"] == "intent":
@@ -244,9 +270,10 @@ def score(case, actual):
     
     if case["stage"] == "ranking":
         return ranking_eval(case, actual)
-        
-    
-    
+
+    if case["stage"] == "toolchain":
+        return toolchain_eval(case, actual)
+
     raise NotImplementedError("score() not written yet — see TODOs above")
 
 
@@ -263,7 +290,7 @@ def report(results):
     print(f"\n{passed}/{len(results)} passed")
 
 
-# ─── THE LOOP THAT CHAINS ALL FOUR ───────────────────────────────────────────
+# ─── MAIN LOOP ───────────────────────────────────────────
 def main():
     # (argparse docs: https://docs.python.org/3/library/argparse.html)
     # --stage scores ONE pipeline stage at a time, e.g. `--stage intent`.
@@ -298,12 +325,15 @@ def main():
                 created_at = (datetime.now(timezone.utc) - timedelta(days=seed["age_days"])).isoformat()
                 run_case(seed["text"], user, created_at=created_at)
 
-        # Retrieval cases need the recalled `hits`, so ask with debug on. Other
-        # stages don't read hits, so requesting them is harmless.
-        actual = run_case(case["input"], user, debug=(case["stage"] in ("retrieval", "ranking")))  # RUN
-        ok = score(case, actual)                  # SCORE
-        results.append({**case, "actual": actual, "ok": ok})  # COLLECT
-    report(results)                                # REPORT
+        # retrieval/ranking need `hits`, toolchain needs `tools` — ask with debug on.
+        actual = run_case(
+            case["input"], user,
+            debug=(case["stage"] in ("retrieval", "ranking", "toolchain")),
+            force_fail=case.get("force_fail"),
+        )  # RUN
+        ok = score(case, actual)                                # SCORE
+        results.append({**case, "actual": actual, "ok": ok})    # COLLECT
+    report(results)                                             # REPORT
 
 
 if __name__ == "__main__":

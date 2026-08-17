@@ -12,6 +12,10 @@ SUPABASE_API_KEY=your-supabase-api-key
 # ── Anthropic ──
 ANTHROPIC_API_KEY=your-anthropic-api-key
 
+# ── CockroachDB MCP (dev-time schema inspection, see .mcp.json) ──
+# Service account token, read-only. Migrations are still applied by hand.
+COCKROACH_MCP_TOKEN=your-cockroach-service-account-token
+
 # ── AWS DynamoDB──
 AWS_REGION=us-east-1
 EMBEDDING_PROVIDER=titan

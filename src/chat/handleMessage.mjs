@@ -16,6 +16,7 @@ import { recall } from "../memory/recall.mjs"; //recall for fetching relevant me
 import { createEvent } from "../events/createEvent.mjs"; // the "change data" leg: writes DynamoDB + episodic memory under one id
 import { writeMemory } from "../memory/writeMemory.mjs"; // step 2: the semantic-preference write (no event, Postgres only)
 import * as chrono from 'chrono-node';
+import { runToolTurn } from "./toolLoop.mjs"; // the agentic loop: memory -> tool args -> answer
 
 const anthropic = new Anthropic(); // TODO 1: reads ANTHROPIC_API_KEY from process.env automatically — confirm your env loader actually sets it (node --env-file=...).
 
@@ -23,6 +24,16 @@ const anthropic = new Anthropic(); // TODO 1: reads ANTHROPIC_API_KEY from proce
 const MODEL = "claude-sonnet-5"; // generation model (the reply). Higher quality, higher cost.
 const CLASSIFIER_MODEL = "claude-haiku-4-5"; // Tier-2 intent classifier: cheap + high-volume, so the smallest model.
 const DISTANCE_THRESHOLD = 0.6; // TODO 2: tune this. Hits with distance ABOVE this are noise, not context — drop them.
+
+// Tool-turn model. Haiku for latency: the chain is 3 sequential round-trips.
+const TOOL_MODEL = process.env.TOOL_MODEL ?? "claude-haiku-4-5";
+
+// Appended to the system prompt only when memories were recalled.
+const TOOL_GUIDANCE = `
+
+Never ask the user for a detail the context above already contains — use it and answer in one turn.
+When a memory supplied a fact you acted on (a place, a time), say so briefly in your reply.
+If a tool fails, say what you couldn't reach and still answer with what the memory gave you.`;
 
 // Structured-output schema for the Tier-2 classifier: force EXACTLY one of the three
 // labels, so we never parse free text or handle "Sure! I think this is a question...".
@@ -231,7 +242,7 @@ function extractEventFields(userMessage) {
 // - Stage 1 (retrieval): its own try/catch → "RETRIEVAL failed (recall/Supabase/embedding)"
 // - Stage 2 (generation): its own try/catch → "GENERATION failed (anthropic.messages.create)"
 
-export async function handleMessage(userMessage, userId, trace = null, createdAt = null) {
+export async function handleMessage(userMessage, userId, trace = null, createdAt = null, ctx = {}) {
   // Two distinct failure domains, so two distinct try/catch blocks. Previously a
   // single catch wrapped BOTH the recall (Supabase + DynamoDB) and the LLM call, and
   // it logged every failure as "Error calling anthropic.messages.create" — which sent
@@ -343,17 +354,18 @@ export async function handleMessage(userMessage, userId, trace = null, createdAt
     //improve just your are a helpful planning assitant if needed
 
     const system = contextBlock //system prompt + empty context block if no relevant memories found, so that the model knows to only use the user message for context
-      ? `You are a helpful planning assistant.\n\n${contextBlock}`
+      ? `You are a helpful planning assistant.\n\n${contextBlock}${TOOL_GUIDANCE}`
       : `You are a helpful planning assistant.`;
-      
-    const result = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 400, // TODO: tune this as needed
-      system,
-      messages: [{ role: "user", content: userMessage }]
-    });
 
-    return result.content[0].text;
+    // Tool loop replaces the single messages.create() that used to live here.
+    return await runToolTurn({
+      anthropic,
+      model: TOOL_MODEL,
+      system,
+      userMessage,
+      trace,
+      ctx,
+    });
   } catch (llmError) {
     // ── Stage 2: GENERATION (Anthropic Messages API) ──
     // Reaching here means retrieval already succeeded, so this is genuinely the LLM

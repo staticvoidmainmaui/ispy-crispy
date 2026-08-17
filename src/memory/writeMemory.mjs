@@ -3,7 +3,6 @@
 // This is your personal/writeMemory_P.mjs, grown up: it now sets memory_type,
 // importance, and user_id so the row is useful for Scale B, not just a text dump.
 
-import { createClient } from "@supabase/supabase-js";
 import { getEmbedding } from "./embeddings.mjs";
 import { pool, toVectorLiteral} from "../db/pool.mjs"
 
@@ -42,12 +41,17 @@ const VALID_TYPES = new Set(["episodic", "semantic", "procedural", "working", "c
 const CLASSIFY_MARGIN = 0.05; // fallback only: semantic must clearly beat episodic to win
 
 async function inferMemoryType(embedding) {
-  const semScore = similarity(embedding, SEMANTIC_PROTOTYPE);
-  const epiScore = similarity(embedding, EPISODIC_PROTOTYPE);
+  const { semantic, episodic } = await getPrototypes();
+  const semScore = similarity(embedding, semantic);
+  const epiScore = similarity(embedding, episodic);
   return semScore - epiScore > CLASSIFY_MARGIN ? "semantic" : "episodic";
 }
 
-export async function writeMemory(content, { userId, memoryType, importance = "medium", id, createdAt } = {}) {
+// tags / metadata / expiresAt: reflection-era additions. NULL expiresAt = durable.
+export async function writeMemory(content, {
+  userId, memoryType, importance = "medium", id, createdAt,
+  tags = [], metadata = {}, expiresAt = null,
+} = {}) {
 
   if (!userId) throw new Error("writeMemory needs a userId (per-user isolation).");
   if (memoryType && !VALID_TYPES.has(memoryType)) {
@@ -58,17 +62,20 @@ export async function writeMemory(content, { userId, memoryType, importance = "m
   const embedding = await getEmbedding(content);
 
   // --- Authoritative if the caller passed it; inferred only as a last resort.
-  const type = memoryType ?? inferMemoryType(embedding);
+  const type = memoryType ?? await inferMemoryType(embedding);
 
-  // --- Upsert - converted from .upsert function into the raw INSERT ... on CONFLICT it translates to 
+  // --- Upsert - converted from .upsert function into the raw INSERT ... on CONFLICT it translates to
   //upsert: to branch out to something on a collision rather than crashing on conflict insert
   const { rows } = await pool.query(
-    `insert into memories (id, user_id, content, embedding, memory_type, importance, created_at)
+    `insert into memories (id, user_id, content, embedding, memory_type, importance, created_at,
+                           tags, metadata, expires_at)
      values (coalesce($1::uuid, gen_random_uuid()), $2, $3, $4::vector(1024), $5, $6,
-             coalesce($7::timestamptz, now()))
+             coalesce($7::timestamptz, now()),
+             $8::text[], $9::jsonb, $10::timestamptz)
      on conflict (user_id, content_hash) do nothing
      returning id, memory_type`,
-    [id ?? null, userId, content, toVectorLiteral(embedding), type, importance, createdAt ?? null],
+    [id ?? null, userId, content, toVectorLiteral(embedding), type, importance, createdAt ?? null,
+     tags, JSON.stringify(metadata), expiresAt ?? null],
   );
 
   const data = rows[0] ?? null;
