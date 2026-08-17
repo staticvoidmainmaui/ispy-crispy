@@ -3,8 +3,11 @@
 // This is your personal/recall.js, re-pointed at the upgraded `match_memories` RPC
 // (which now returns id + content + memory_type + distance, scoped by user_id).
 import { pool, toVectorLiteral } from "../db/pool.mjs";
+import { loadSql, sqlDir } from "../db/sql.mjs";
 import { hydrateEvents } from "../events/eventsTable.mjs";
 import { getEmbedding } from "./embeddings.mjs";
+
+const SQL = sqlDir(import.meta.url);
 
 
 // ─── recall(query, { userId, topK, memoryType }) ─────────────────────────────────
@@ -22,6 +25,17 @@ export async function recall(query, { userId, topK = 3, memoryType = null } = {}
     `select * from match_memories($1::vector(1024), $2, $3::uuid, $4::memory_type)`,
     [toVectorLiteral(queryEmbedding), topK, userId, memoryType],
   );
+
+  //  ───  Access write-back  ───  the promotion signal's raw input.
+  // Deliberately NOT awaited. Recall is a read path with a p95 budget, and nothing in
+  // the answer depends on the counter landing — a lost increment costs a fraction of a
+  // ranking point on the next query. Awaiting it would put a write on the critical path
+  // of every question the user asks. The .catch is mandatory, not decorative: an
+  // unhandled rejection from a floating promise takes the process down in Node.
+  if (data.length > 0) {
+    pool.query(loadSql(SQL, "touch_access"), [data.map(row => row.id)])
+      .catch(err => console.error("recall(): access write-back failed (non-fatal):", err.message));
+  }
 
   let hydratedById;
   try {
