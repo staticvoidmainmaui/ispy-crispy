@@ -1,131 +1,246 @@
-
-
 [
-    {
-        "id": "s1-add-01",
-        "stage": "intent",
-        "input": "book dentist Friday 3pm",
-        "expected": {"intent": "add_event"}},
-    {
-        "id" : "s1-add-02",
-        "stage": "intent",
-        "input":"schedule study session tomorrow at 9am at the library",
-        "expected": { "intent": "add_event" }},
-    {
-        "id" : "s1-add-03",
-        "stage" : "intent",
-        "input" : "please add gym session tonight",
-        "expected" : { "intent" : "add_event" }},
-
-    {
-    
-        "id" : "s1-add-04",
-        "stage" : "intent",
-        "input" : "remind me I like mornings",
-        "expected" : { "intent" : "add_event" }},
-
-    {
-        "id" : "s1-pref-01",
-        "stage" : "intent",
-        "input" : "I hate Monday meetings",
-        "expected" : { "intent" : "save_preference" }},
-        
-    {
-        "id": "s1-pref-02", 
-        "stage": "intent",
-        "input": "I prefer studying at night",
-        "expected": {"intent": "save_preference"}},
-
-    {
-        "id": "s1-pref-03", 
-        "stage": "intent",
-        "input": "I always study late",
-        "expected": {"intent": "save_preference"}},
-
-    {
-        "id": "s1-pref-04", 
-        "stage": "intent",
-        "input": "I can't stand early standups",
-        "expected": {"intent": "save_preference"}},
-
-    {
-
-        "id": "s1-q-01", 
-        "stage": "intent",
-        "input": "what's on my schedule Friday?",
-        "expected": {"intent": "question"}},
-
-    {
-        "id": "s1-q-02", 
-        "stage": "intent",
-        "input": "when is my dentist appointment",
-        "expected": {"intent": "question"}},
-
-    {
-        "id": "s1-q-03",
-        "stage": "intent",
-        "input": "my favorite is late-night coding",
-        "expected": {"intent": "save_preference"}},
-
-
-    {   "id": "s1b-third-01",
-        "stage": "intent",
-        "input": "my sister loves mornings",
-        "expected": {"intent": "save_preference"}},
-
-    {     
-        "id": "s1b-noverb-01", 
-        "stage": "intent",
-        "input": "dentist Friday 3pm",
-        "expected": {"intent": "add_event"}},
-
-    {
-        "id": "s2-extract-01", "stage": "extract",
-        "input": "schedule study session tomorrow at 9am at the library",
-        "expected": {"title": "study session",
-                    "location": "the library",
-                    "time_not_null": true}},
-
-    {
-        "id": "s2-extract-02", "stage": "extract",
-        "input": "add groceries",
-        "expected": {"title": "groceries",
-                    "time_not_null": false,
-                    "should_write": false}},
-
-    {
-        "id": "s3-inject-01" , "stage": "retrieval",
-        "seed": [
-            "I hate mornings",
-            "I prefer tea over coffee",
-            "I can't stand loud music",
-            "I always use a standing desk",
-            "I hate doing laundry",
-            "I love spicy food"
-        ],
-        "input" : "What should I do on Friday?",
-        "expected" : {"must_include" : ["hate mornings"]}
-    },
-    
-    {
-        "id": "s3-thirdperson-01" , "stage": "retrieval",
-        "seed": ["My sister loves mornings"],
-        "input" : "when should I schedule things ?",
-        "expected" : {"must_include" : ["sister"]}
-    },
-
-    {"id": "s4-fresh-wins-01", "stage": "ranking",
+  {
+    "id": "s1-add-01",
+    "stage": "intent",
+    "input": "book dentist Friday 3pm",
+    "expected": {
+      "intent": "add_event"
+    }
+  },
+  {
+    "id": "s1-add-02",
+    "stage": "intent",
+    "input": "schedule study session tomorrow at 9am at the library",
+    "expected": {
+      "intent": "add_event"
+    }
+  },
+  {
+    "id": "s1-add-03",
+    "stage": "intent",
+    "input": "please add gym session tonight",
+    "expected": {
+      "intent": "add_event"
+    }
+  },
+  {
+    "id": "s1-add-04",
+    "stage": "intent",
+    "input": "remind me I like mornings",
+    "expected": {
+      "intent": "add_event"
+    }
+  },
+  {
+    "id": "s1-pref-01",
+    "stage": "intent",
+    "input": "I hate Monday meetings",
+    "expected": {
+      "intent": "save_preference"
+    }
+  },
+  {
+    "id": "s1-pref-02",
+    "stage": "intent",
+    "input": "I prefer studying at night",
+    "expected": {
+      "intent": "save_preference"
+    }
+  },
+  {
+    "id": "s1-pref-03",
+    "stage": "intent",
+    "input": "I always study late",
+    "expected": {
+      "intent": "save_preference"
+    }
+  },
+  {
+    "id": "s1-pref-04",
+    "stage": "intent",
+    "input": "I can't stand early standups",
+    "expected": {
+      "intent": "save_preference"
+    }
+  },
+  {
+    "id": "s1-q-01",
+    "stage": "intent",
+    "input": "what's on my schedule Friday?",
+    "expected": {
+      "intent": "question"
+    }
+  },
+  {
+    "id": "s1-q-02",
+    "stage": "intent",
+    "input": "when is my dentist appointment",
+    "expected": {
+      "intent": "question"
+    }
+  },
+  {
+    "id": "s1-q-03",
+    "stage": "intent",
+    "input": "my favorite is late-night coding",
+    "expected": {
+      "intent": "save_preference"
+    }
+  },
+  {
+    "id": "s1b-third-01",
+    "stage": "intent",
+    "input": "my sister loves mornings",
+    "expected": {
+      "intent": "save_preference"
+    }
+  },
+  {
+    "id": "s1b-noverb-01",
+    "stage": "intent",
+    "input": "dentist Friday 3pm",
+    "expected": {
+      "intent": "add_event"
+    }
+  },
+  {
+    "id": "s2-extract-01",
+    "stage": "extract",
+    "input": "schedule study session tomorrow at 9am at the library",
+    "expected": {
+      "title": "study session",
+      "location": "the library",
+      "time_not_null": true
+    }
+  },
+  {
+    "id": "s2-extract-02",
+    "stage": "extract",
+    "input": "add groceries",
+    "expected": {
+      "title": "groceries",
+      "time_not_null": false,
+      "should_write": false
+    }
+  },
+  {
+    "id": "s3-inject-01",
+    "stage": "retrieval",
     "seed": [
-            {"text": "I prefer mornings", "age_days": 21},
-            {"text": "I prefer afternoons now", "age_days": 1}
-            ],
+      "I hate mornings",
+      "I prefer tea over coffee",
+      "I can't stand loud music",
+      "I always use a standing desk",
+      "I hate doing laundry",
+      "I love spicy food"
+    ],
+    "input": "What should I do on Friday?",
+    "expected": {
+      "must_include": [
+        "hate mornings"
+      ]
+    }
+  },
+  {
+    "id": "s3-thirdperson-01",
+    "stage": "retrieval",
+    "seed": [
+      "My sister loves mornings"
+    ],
+    "input": "when should I schedule things ?",
+    "expected": {
+      "must_include": [
+        "sister"
+      ]
+    }
+  },
+  {
+    "id": "s4-fresh-wins-01",
+    "stage": "ranking",
+    "seed": [
+      {
+        "text": "I prefer mornings",
+        "age_days": 21
+      },
+      {
+        "text": "I prefer afternoons now",
+        "age_days": 1
+      }
+    ],
     "input": "when should I study?",
-    "expected": {"ranks_higher": "afternoons", "than": "mornings"}}
-
+    "expected": {
+      "ranks_higher": "afternoons",
+      "than": "mornings"
+    }
+  },
+  {
+    "id": "s5-tool-01",
+    "stage": "toolchain",
+    "seed": [
+      "I always meet Sarah for coffee at Blue Bottle Oakland"
+    ],
+    "input": "What's the weather where I'm meeting Sarah?",
+    "expected": {
+      "tools_called": [
+        "geocode_place",
+        "get_weather"
+      ],
+      "tool_input_contains": {
+        "geocode_place": {
+          "place": "blue bottle"
+        }
+      },
+      "tool_ok": {
+        "geocode_place": true,
+        "get_weather": true
+      },
+      "reply_must_not_match": "\\?\\s*$",
+      "reply_contains_any": [
+        "°",
+        "degrees",
+        "rain",
+        "sun",
+        "cloud",
+        "wind",
+        "temperature",
+        "clear"
+      ]
+    }
+  },
+  {
+    "id": "s5-tool-02-degrade",
+    "stage": "toolchain",
+    "seed": [
+      "I always meet Sarah for coffee at Blue Bottle Oakland"
+    ],
+    "input": "What's the weather where I'm meeting Sarah?",
+    "force_fail": "get_weather",
+    "expected": {
+      "tools_called": [
+        "geocode_place",
+        "get_weather"
+      ],
+      "tool_ok": {
+        "geocode_place": true,
+        "get_weather": false
+      },
+      "reply_contains_any": [
+        "blue bottle",
+        "oakland"
+      ]
+    }
+  },
+  {
+    "id": "s5-tool-03-no-location",
+    "stage": "toolchain",
+    "seed": [
+      "I have a standing sync with Marcus every Tuesday"
+    ],
+    "input": "What's the weather where I'm meeting Marcus?",
+    "expected": {
+      "tools_absent": [
+        "get_weather"
+      ]
+    }
+  }
 ]
-
-
-
-
-    
-

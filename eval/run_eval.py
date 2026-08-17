@@ -16,6 +16,7 @@
 # Docs: https://requests.readthedocs.io/en/latest/user/quickstart/
 
 import json
+import re         # toolchain cases assert a reply does NOT match a pattern
 import argparse   # parse --stage so you can score one pipeline stage at a time
 import uuid       # unique per-case userId, so cases can't pollute each other's recall
 from datetime import datetime, timedelta, timezone   # backdate seeded memories for recency tests
@@ -38,7 +39,7 @@ def load_cases(path):
 
 
 # ─── PART 2: run one case against the live server (the "curl") ───────────────
-def run_case(message, user=DEV_USER, debug=False, created_at=None):
+def run_case(message, user=DEV_USER, debug=False, created_at=None, force_fail=None):
     """
     Send one planner message to the running server and return its parsed reply.
 
@@ -56,9 +57,14 @@ def run_case(message, user=DEV_USER, debug=False, created_at=None):
     body = {"message": message, "userId": user}
     if created_at is not None:
         body["created_at"] = created_at   # eval-only: backdate this write (recency tests)
+    # force_fail — name a tool that must fail on this request, so the degradation
+    # path is deterministic instead of waiting for a real outage. Honored by the
+    # server only under ?debug=1, so production can't be told to break itself.
+    headers = {"X-Tools-Force-Fail": force_fail} if force_fail else None
     resp = requests.post(
         BASE_URL + CHAT_ROUTE + ("?debug=1" if debug else ""),
         json=body,
+        headers=headers,
         timeout=30,
     )
     resp.raise_for_status()   # a 500 from the server should fail loudly, not silently pass
@@ -229,6 +235,63 @@ def ranking_eval(case, actual):
     return higher < lower                  # smaller index = nearer the top
 
 
+def toolchain_eval(case, actual):
+    """
+    Tool-chain scoring. actual["tools"] is the executed tool set from ?debug=1:
+    [{name, input, ok, ms, error?}]. We assert on WHICH tools ran and WHAT
+    ARGUMENTS they ran with — the argument is the whole point, because nothing in
+    "what's the weather where I'm meeting Sarah?" names a place. If geocode_place
+    was called with a location, that location came from memory.
+
+    tools_called        — these names ran, in this relative order (subset, not exact)
+    tools_absent        — these names must NOT have run
+    tool_input_contains — {tool: {field: substring}} on the arguments it ran with
+    tool_ok             — {tool: bool} expected success/failure per tool
+    reply_must_not_match— regex that must NOT match the reply (e.g. a trailing "?")
+    reply_contains_any  — at least one of these substrings appears in the reply
+    """
+    exp = case["expected"]
+    tools = actual.get("tools") or []
+    names = [t.get("name") for t in tools]
+    reply = (actual.get("reply") or "").lower()
+
+    # ordered subset: each expected name appears after the previous one
+    pos = -1
+    for want in exp.get("tools_called", []):
+        try:
+            pos = names.index(want, pos + 1)
+        except ValueError:
+            return False
+
+    for banned in exp.get("tools_absent", []):
+        if banned in names:
+            return False
+
+    for tool, fields in exp.get("tool_input_contains", {}).items():
+        call = next((t for t in tools if t.get("name") == tool), None)
+        if call is None:
+            return False
+        for field, needle in fields.items():
+            got = str((call.get("input") or {}).get(field, "")).lower()
+            if needle.lower() not in got:
+                return False
+
+    for tool, want_ok in exp.get("tool_ok", {}).items():
+        call = next((t for t in tools if t.get("name") == tool), None)
+        if call is None or bool(call.get("ok")) != want_ok:
+            return False
+
+    pattern = exp.get("reply_must_not_match")
+    if pattern and re.search(pattern, actual.get("reply") or ""):
+        return False
+
+    any_of = exp.get("reply_contains_any")
+    if any_of and not any(s.lower() in reply for s in any_of):
+        return False
+
+    return True
+
+
 def score(case, actual):
     """Return True if `actual` satisfies case["expected"]. Fill this in."""
     if case["stage"] == "intent":
@@ -244,9 +307,10 @@ def score(case, actual):
     
     if case["stage"] == "ranking":
         return ranking_eval(case, actual)
-        
-    
-    
+
+    if case["stage"] == "toolchain":
+        return toolchain_eval(case, actual)
+
     raise NotImplementedError("score() not written yet — see TODOs above")
 
 
@@ -298,9 +362,13 @@ def main():
                 created_at = (datetime.now(timezone.utc) - timedelta(days=seed["age_days"])).isoformat()
                 run_case(seed["text"], user, created_at=created_at)
 
-        # Retrieval cases need the recalled `hits`, so ask with debug on. Other
-        # stages don't read hits, so requesting them is harmless.
-        actual = run_case(case["input"], user, debug=(case["stage"] in ("retrieval", "ranking")))  # RUN
+        # Retrieval cases need the recalled `hits`, toolchain cases need `tools`, so
+        # ask with debug on. Other stages don't read either, so requesting is harmless.
+        actual = run_case(
+            case["input"], user,
+            debug=(case["stage"] in ("retrieval", "ranking", "toolchain")),
+            force_fail=case.get("force_fail"),
+        )  # RUN
         ok = score(case, actual)                  # SCORE
         results.append({**case, "actual": actual, "ok": ok})  # COLLECT
     report(results)                                # REPORT
