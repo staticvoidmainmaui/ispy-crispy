@@ -21,9 +21,11 @@ where a.user_id = $1
   and a.memory_type = 'semantic'
   and b.memory_type = 'semantic'
 
-  -- check metadata for resolved matches if already marked superseded
+  -- check metadata for resolved matches if already marked superseded as well as consolidated.
   and a.metadata->>'superseded_by' is null -- ->> extracts text val
   and b.metadata->>'superseded_by' is null
+  and a.metadata->>'consolidated_into' is null
+  and b.metadata->>'consolidated_into' is null
 order by distance asc
 limit $3;
 -- caps how many pairs come back in one call. 
