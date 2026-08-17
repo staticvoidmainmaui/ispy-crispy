@@ -26,12 +26,8 @@ export async function recall(query, { userId, topK = 3, memoryType = null } = {}
     [toVectorLiteral(queryEmbedding), topK, userId, memoryType],
   );
 
-  //  ───  Access write-back  ───  the promotion signal's raw input.
-  // Deliberately NOT awaited. Recall is a read path with a p95 budget, and nothing in
-  // the answer depends on the counter landing — a lost increment costs a fraction of a
-  // ranking point on the next query. Awaiting it would put a write on the critical path
-  // of every question the user asks. The .catch is mandatory, not decorative: an
-  // unhandled rejection from a floating promise takes the process down in Node.
+  //  ───  Access write-back  ───  promotion signal. NOT awaited (read path).
+  // .catch is mandatory: an unhandled floating rejection kills the process.
   if (data.length > 0) {
     pool.query(loadSql(SQL, "touch_access"), [data.map(row => row.id)])
       .catch(err => console.error("recall(): access write-back failed (non-fatal):", err.message));

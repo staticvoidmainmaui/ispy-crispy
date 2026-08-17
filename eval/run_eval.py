@@ -57,9 +57,7 @@ def run_case(message, user=DEV_USER, debug=False, created_at=None, force_fail=No
     body = {"message": message, "userId": user}
     if created_at is not None:
         body["created_at"] = created_at   # eval-only: backdate this write (recency tests)
-    # force_fail — name a tool that must fail on this request, so the degradation
-    # path is deterministic instead of waiting for a real outage. Honored by the
-    # server only under ?debug=1, so production can't be told to break itself.
+    # force_fail — deterministic tool failure for the degradation case (debug=1 only).
     headers = {"X-Tools-Force-Fail": force_fail} if force_fail else None
     resp = requests.post(
         BASE_URL + CHAT_ROUTE + ("?debug=1" if debug else ""),
@@ -72,40 +70,7 @@ def run_case(message, user=DEV_USER, debug=False, created_at=None, force_fail=No
 
 
 # ─── PART 3: score one reply against what we expected ────────────────────────
-# THIS IS THE HEART OF THE HARNESS AND THE PART THAT IS YOURS TO WRITE.
-#
-# Remember the wrinkle we found: /chat returns {"reply": <english string>},
-# NOT {"intent": "add_event"}. So the intent never crosses the wire — you must
-# infer whether the right branch fired by reading the reply text.
-#
-# TODO (1) — THE LOAD-BEARING DECISION. Pick how you detect intent from a reply:
-#     Option A (behavioral, no code changes to the server):
-#         Read the reply string and classify which branch produced it, e.g.
-#           - starts with "Booked"        -> add_event fired
-#           - a save_preference ack       -> save_preference fired  (check your server's wording)
-#           - anything else               -> question / recall path
-#         Pro: tests the REAL end-to-end system, server untouched.
-#         Con: brittle — if you reword a reply, the scorer breaks. Couples the
-#              test to phrasing, not behavior.
 
-
-#     Option B (expose intent for testing):
-#         Add an opt-in to /chat (e.g. ?debug=1) that returns {reply, intent},
-#         then score intent == expected["intent"] exactly.
-#         Pro: clean exact-match scoring, robust to reply wording.
-#         Con: you changed the system to make it testable (a real, common
-#              trade-off — "design for testability" — but a choice to make consciously).
-#     Write down WHY you picked one. That reasoning is the portfolio artifact.
-#
-# TODO (2) — Implement the intent stages first. Given `case` and `actual`
-#     (the parsed {"reply": ...}), return True if the reply reflects
-#     case["expected"]["intent"]. Keep it to a few lines.
-#
-# TODO (3) — Later: branch on case["stage"] so this one function can score
-#     "intent" (behavioral/exact), "extract" (structural — some fields exact,
-#     time asserted as not-null NOT as a literal ISO string), "retrieval"
-#     (must_include / must_exclude a memory id), and "ranking" (an ordering:
-#     ranks_higher than). Start with a simple `if case["stage"] == "intent"`.
 
 #HELPERS FOR SCORING
 def extract_eval(case, actual):
@@ -237,18 +202,16 @@ def ranking_eval(case, actual):
 
 def toolchain_eval(case, actual):
     """
-    Tool-chain scoring. actual["tools"] is the executed tool set from ?debug=1:
-    [{name, input, ok, ms, error?}]. We assert on WHICH tools ran and WHAT
-    ARGUMENTS they ran with — the argument is the whole point, because nothing in
-    "what's the weather where I'm meeting Sarah?" names a place. If geocode_place
-    was called with a location, that location came from memory.
+    Tool-chain scoring. actual["tools"] = [{name, input, ok, ms, error?}] from ?debug=1.
+    Asserts WHICH tools ran and WHAT ARGUMENTS they got — the argument is the proof the
+    memory was load-bearing.
 
-    tools_called        — these names ran, in this relative order (subset, not exact)
-    tools_absent        — these names must NOT have run
-    tool_input_contains — {tool: {field: substring}} on the arguments it ran with
-    tool_ok             — {tool: bool} expected success/failure per tool
-    reply_must_not_match— regex that must NOT match the reply (e.g. a trailing "?")
-    reply_contains_any  — at least one of these substrings appears in the reply
+    tools_called        — these ran, in this relative order (subset, not exact)
+    tools_absent        — these must NOT have run
+    tool_input_contains — {tool: {field: substring}}
+    tool_ok             — {tool: bool}
+    reply_must_not_match— regex that must NOT match the reply
+    reply_contains_any  — at least one substring appears in the reply
     """
     exp = case["expected"]
     tools = actual.get("tools") or []
@@ -327,7 +290,7 @@ def report(results):
     print(f"\n{passed}/{len(results)} passed")
 
 
-# ─── THE LOOP THAT CHAINS ALL FOUR ───────────────────────────────────────────
+# ─── MAIN LOOP ───────────────────────────────────────────
 def main():
     # (argparse docs: https://docs.python.org/3/library/argparse.html)
     # --stage scores ONE pipeline stage at a time, e.g. `--stage intent`.
@@ -362,16 +325,15 @@ def main():
                 created_at = (datetime.now(timezone.utc) - timedelta(days=seed["age_days"])).isoformat()
                 run_case(seed["text"], user, created_at=created_at)
 
-        # Retrieval cases need the recalled `hits`, toolchain cases need `tools`, so
-        # ask with debug on. Other stages don't read either, so requesting is harmless.
+        # retrieval/ranking need `hits`, toolchain needs `tools` — ask with debug on.
         actual = run_case(
             case["input"], user,
             debug=(case["stage"] in ("retrieval", "ranking", "toolchain")),
             force_fail=case.get("force_fail"),
         )  # RUN
-        ok = score(case, actual)                  # SCORE
-        results.append({**case, "actual": actual, "ok": ok})  # COLLECT
-    report(results)                                # REPORT
+        ok = score(case, actual)                                # SCORE
+        results.append({**case, "actual": actual, "ok": ok})    # COLLECT
+    report(results)                                             # REPORT
 
 
 if __name__ == "__main__":

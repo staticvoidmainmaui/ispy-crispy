@@ -25,17 +25,10 @@ const MODEL = "claude-sonnet-5"; // generation model (the reply). Higher quality
 const CLASSIFIER_MODEL = "claude-haiku-4-5"; // Tier-2 intent classifier: cheap + high-volume, so the smallest model.
 const DISTANCE_THRESHOLD = 0.6; // TODO 2: tune this. Hits with distance ABOVE this are noise, not context — drop them.
 
-// Model for the tool-calling turn. Haiku, not sonnet, and the reason is the latency
-// budget: the demo bar is p95 < 3s for embed + recall + TWO model round-trips + two
-// HTTP fetches. Haiku lands ~2.0-2.4s; sonnet busts 3s on the second round alone.
-// Tool selection here is mechanical and the answer is short — the quality gap doesn't
-// bite. Env-switchable so a quality regression is one restart away from sonnet.
+// Tool-turn model. Haiku for latency: the chain is 3 sequential round-trips.
 const TOOL_MODEL = process.env.TOOL_MODEL ?? "claude-haiku-4-5";
 
-// Appended to the system prompt ONLY when memories were recalled. Two jobs:
-// (1) kill the clarifying question — asking "where are you meeting?" when the context
-//     already says Blue Bottle is exactly the failure the demo is built to disprove;
-// (2) make the model name the memory it used, so the answer shows its work.
+// Appended to the system prompt only when memories were recalled.
 const TOOL_GUIDANCE = `
 
 Never ask the user for a detail the context above already contains — use it and answer in one turn.
@@ -364,9 +357,7 @@ export async function handleMessage(userMessage, userId, trace = null, createdAt
       ? `You are a helpful planning assistant.\n\n${contextBlock}${TOOL_GUIDANCE}`
       : `You are a helpful planning assistant.`;
 
-    // The tool loop replaces the single messages.create() that used to live here.
-    // Same inputs, same return type (a string) — the difference is that the model
-    // may now spend a few round-trips calling tools before it answers.
+    // Tool loop replaces the single messages.create() that used to live here.
     return await runToolTurn({
       anthropic,
       model: TOOL_MODEL,

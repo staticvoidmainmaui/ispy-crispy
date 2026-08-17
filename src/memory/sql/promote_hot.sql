@@ -1,14 +1,5 @@
--- Promote frequently-recalled memories one importance step. The DURABLE half of
--- promotion after score recomputation. This is the "hot" promotion signal.
+-- Promote frequently-recalled memories one importance step. Idempotent (promoted_at guard).
 -- $1 = user_id (uuid)   $2 = min_access (int)
---
--- Why a durable bump on top of the score term: the score term decays out of view if a
--- memory goes quiet, which is right for ranking but wrong for record-keeping. A memory
--- you needed twenty times has PROVEN it matters, and that fact should outlive the streak.
---
--- One step only, capped at 'high'. 'critical' stays reserved for a human saying so —
--- nothing should reach the top of the scale by being asked about a lot.
--- The metadata guard makes this idempotent: a row promotes once, not once per nightly run.
 
 update memories
 set importance = case importance

@@ -1,17 +1,11 @@
-// The tool registry — one self-describing entry per tool, module singleton (pattern #10).
-// Adding a tool later (calendar, digest, shopping) = append an entry. Nothing else changes.
-//
-// Each entry carries its own VALIDATOR, and that is the load-bearing part:
-// tool arguments here come from RECALLED MEMORY, which is user-authored text pulled from
-// a datastore. Pattern #6 fences that text as data in the prompt; validate() is the same
-// boundary on the way OUT — the checkpoint between "the model read a memory" and
-// "the process made a network call with it". Nothing executes unvalidated.
+// Tool registry — one self-describing entry per tool, module singleton.
+// Adding a tool = append an entry.
 
 import { geocodePlace } from "./geocode.mjs";   // Nominatim: knows venues, not just cities
 import { getWeather } from "./openMeteo.mjs";   // Open-Meteo: forecast from coordinates
 
-// ─── validators ───
-// Return null when the input is fine, or a short reason string when it isn't.
+// ─── validators ───  null = ok, string = reason to reject.
+// Tool args come from recalled memory, so this is the recall -> network boundary.
 function validatePlace(input) {
   const place = input?.place;
   if (typeof place !== "string") return "place must be a string";
@@ -19,7 +13,7 @@ function validatePlace(input) {
   if (trimmed.length === 0) return "place was empty";
   if (trimmed.length > 80) return "place was too long to be a place name";
   if (/[\n\r]/.test(trimmed)) return "place contained line breaks";
-  if (/:\/\//.test(trimmed)) return "place looked like a URL, not a place name"; //possibily implement URL fetch for location later 
+  if (/:\/\//.test(trimmed)) return "place looked like a URL, not a place name"; //possibily implement URL fetch for location later
   return null;
 }
 
@@ -72,8 +66,7 @@ export const TOOLS = [
   },
 ];
 
-// ─── toAnthropicTools() ───
-// Strip the local-only fields; the API only wants name/description/input_schema.
+// ─── toAnthropicTools() ───  strip local-only fields
 export function toAnthropicTools() {
   return TOOLS.map(({ name, description, input_schema }) => ({ name, description, input_schema }));
 }
@@ -83,10 +76,7 @@ export function getTool(name) {
 }
 
 // ─── runTool(name, input, ctx) → { ok, result | error, ms } ───
-// The single execution wrapper. Normalizes EVERY outcome into the same shape so the tool
-// loop never has to branch on how a tool failed — an unknown tool, a rejected argument,
-// and a dead upstream all come back as `{ ok: false, error }` and get fed to the model,
-// which then narrates the gap instead of inventing a forecast.
+// Never throws. Every outcome normalizes to the same shape.
 export async function runTool(name, input, ctx = {}) {
   const startedAt = Date.now();
   const done = (payload) => ({ name, input, ms: Date.now() - startedAt, ...payload });
@@ -96,14 +86,13 @@ export async function runTool(name, input, ctx = {}) {
     return done({ ok: false, error: `unknown tool "${name}"` });
   }
 
-  // Step 1 — validate before executing. The recall -> tool-args injection boundary.
+  // Step 1 — validate before executing.
   const rejection = tool.validate(input);
   if (rejection) {
     return done({ ok: false, error: `invalid arguments: ${rejection}` });
   }
 
-  // Step 2 — deterministic failure injection, for the eval's degradation case.
-  // Request-scoped (ctx) or process-wide (env); never fires unless explicitly asked for.
+  // Step 2 — deterministic failure injection (eval degradation case).
   const forceFail = ctx.forceFail ?? process.env.TOOLS_FORCE_FAIL ?? null;
   if (forceFail === name) {
     return done({ ok: false, error: `${name}: forced failure (test)` });

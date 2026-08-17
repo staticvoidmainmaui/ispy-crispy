@@ -1,8 +1,5 @@
 // Lambda entry point for ReflectAgent. EventBridge fires it on a schedule.
-//
-// Its whole job is fan-out: pick the users, run reflect() per user, aggregate. The
-// maintenance logic lives in reflectAgent.mjs — this is the adapter, and it stays as
-// thin as server.mjs is for the HTTP side (pattern #12).
+// Fan-out only — maintenance logic lives in reflectAgent.mjs.
 
 import { reflect, PHASES } from "./reflectAgent.mjs";
 import { findActiveUsers } from "../memory/consolidation.mjs";
@@ -14,9 +11,7 @@ export const handler = async (event = {}) => {
     ? [event.userId]
     : await findActiveUsers({ lookbackDays: event.lookbackDays ?? DEFAULT_LOOKBACK_DAYS });
 
-  // Every tuning knob reflect() accepts is reachable from the event payload. Previously
-  // only dryRun was forwarded, so a scheduled run was pinned to the defaults and there
-  // was no way to, say, fire a tag-only pass without editing and redeploying the bundle.
+  // Every reflect() knob is reachable from the event payload.
   const options = {
     dryRun: event.dryRun ?? false,
     phases: event.phases ?? PHASES,
@@ -28,9 +23,7 @@ export const handler = async (event = {}) => {
     ...(event.tagLimit      !== undefined && { tagLimit: event.tagLimit }),
   };
 
-  // Per-user isolation. One user with a malformed row used to abort the whole nightly
-  // batch, so everyone after them in the list silently went unmaintained — and the
-  // failure looked like "reflection didn't run" rather than "user X is broken".
+  // Per-user isolation: one bad user must not abort the batch.
   const summaries = [];
   const failures = [];
   for (const userId of users) {
@@ -42,8 +35,7 @@ export const handler = async (event = {}) => {
     }
   }
 
-  // Totals are summed defensively: a phase that failed reports { error } with no counts,
-  // and a phase that was skipped isn't present at all.
+  // Defensive: a failed phase has no counts, a skipped phase isn't present.
   const total = (phase, field) =>
     summaries.reduce((n, s) => n + (s.phases?.[phase]?.[field] ?? 0), 0);
 

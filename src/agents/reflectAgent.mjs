@@ -1,20 +1,12 @@
-// ReflectAgent — runs between conversations, as maintenance on the store.
+// ReflectAgent — maintenance on the store, between conversations. Five phases:
+//   expire     lapse working memories
+//   contradict supersede overturned beliefs
+//   merge      collapse restatement clusters into one summary
+//   tag        assign facets for cheap filtered retrieval
+//   promote    bump importance for frequently-recalled memories
 //
-// It used to do one thing: find near-duplicate semantic memories and supersede the
-// contradicted one. That is now the second of five phases. The claim this upgrade makes
-// is bigger than "chatbot with RAG" — a background agent that REORGANIZES the store:
-//
-//   expire     lapse working memories so scratch doesn't accumulate forever
-//   contradict supersede beliefs a newer statement overturned      (the original job)
-//   merge      collapse clusters of restatements into one summary
-//   tag        assign facets so retrieval can filter cheaply
-//   promote    bump importance for memories recalled often enough to prove they matter
-//
-// Order is deliberate and each phase feeds the next:
-//   expire runs FIRST because it shrinks every candidate set that follows.
-//   merge runs after contradict so a superseded row is never folded into a summary.
-//   tag runs after merge so we never spend an LLM call tagging a row about to be hidden.
-//   promote runs LAST because it reads access_count, which nothing above it changes.
+// Order matters: expire shrinks later candidate sets, merge follows contradict,
+// tag follows merge, promote reads access_count last.
 
 import Anthropic from "@anthropic-ai/sdk";
 import {
@@ -30,17 +22,13 @@ const JUDGE_MODEL = "claude-haiku-4-5";
 const MAX_PAIRS = 20;
 const TAG_BATCH_SIZE = 20;
 
-// Thresholds are NOT redefined here. They live in consolidation.mjs next to the
-// measurements that justify them — this file used to carry a MAX_DISTANCE of 0.85 that
-// silently disagreed with consolidation's 0.25, and the caller always won.
+// Distance thresholds live in consolidation.mjs, not here.
 
 export const PHASES = ["expire", "contradict", "merge", "tag", "promote"];
 
 // ── Controlled tag vocabulary ────────────────────────────────────────────────
-// Closed set, not open-ended. Faceted retrieval needs tags that MATCH each other: an
-// open vocabulary yields "food", "cuisine", "eating", "meals" for one concept and the
-// `tags && $1` filter in 08 then finds nothing. A small controlled set is what makes
-// the facet cheap and meaningful. Grow it deliberately, never by letting the model invent.
+// Closed set: an open vocabulary yields food/cuisine/eating for one concept and
+// the `tags && $1` filter in 08 then matches nothing.
 export const TAG_VOCAB = [
   "scheduling", "preference", "location", "food", "health",
   "work", "social", "routine", "travel",
@@ -84,10 +72,8 @@ const TAG_SCHEMA = {  //tagging object ? distinct ?
 };
 
 // ── judgeContradiction ───────────────────────────────────────────────────────
-// The measured distance bands for contradiction (0.36–0.76) and unrelated (0.66–0.92)
-// OVERLAP, so the candidate query cannot pre-filter cleanly. This judge is the actual
-// filter, and it will be handed unrelated pairs on purpose. Saying "compatible" to
-// those is the correct outcome, not a miss.
+// The real filter — distance can't separate contradiction from unrelated, so this
+// gets handed unrelated pairs on purpose.
 
 //logic to be evaluated after lexical matching
 async function judgeContradiction(older, newer) {
@@ -116,16 +102,13 @@ async function judgeContradiction(older, newer) {
     const { verdict } = JSON.parse(result.content[0].text);
     return verdict === "contradicts" ? "contradicts" : "compatible";
   } catch (judgeError) {
-    // Fail toward the cheap mistake (pattern #4): a skipped contradiction is a duplicate
-    // that survives to the next run; a wrongly-supersed memory is gone from every answer.
+    // Fail toward the cheap mistake: a missed contradiction beats a destroyed memory.
     console.error("judgeContradiction(): failed, defaulting to compatible:", judgeError.message);
     return "compatible";
   }
 }
 
 // ── summarizeCluster ─────────────────────────────────────────────────────────
-// Several ways of saying one thing -> one consolidated memory that says it once.
-
 // ? what if members are distinctly different? The model is instructed to preserve every detail
 async function summarizeCluster(members) {
   const system =
@@ -152,12 +135,7 @@ async function summarizeCluster(members) {
 }
 
 // ── tagBatch ─────────────────────────────────────────────────────────────────
-// One call per batch of rows, not one per row — tagging the whole store one memory at
-// a time is the kind of per-row LLM call that makes a nightly job expensive.
-//
-// Assignments come back keyed by INDEX, never by uuid. A model asked to echo a uuid
-// will occasionally mistype one, and a mistyped uuid either writes tags to the wrong
-// memory or silently no-ops. An integer index can only be right or out of range.
+// Batched, and keyed by INDEX not uuid — a mistyped uuid would tag the wrong row.
 async function tagBatch(rows) {
   const system =
     "Assign facet tags to each memory, choosing only from the allowed list.\n" +
@@ -184,13 +162,8 @@ async function tagBatch(rows) {
 }
 
 // ── reflect ──────────────────────────────────────────────────────────────────
-// Returns a per-phase report. Every phase is its own labeled failure domain
-// (pattern #3): one phase throwing records an error and the run continues, because a
-// tagging outage is no reason to skip promotion.
-//
-// dryRun computes what each phase WOULD do and writes nothing. The merge phase still
-// calls the summarizer on a dry run — the proposed summary text is the whole point of
-// previewing a merge, and seeing it is how you decide the threshold is right.
+// Per-phase report. A phase that throws records { error } and the run continues.
+// dryRun writes nothing, but merge still summarizes so you can read the proposal.
 export async function reflect(userId, {
   dryRun = false,
   phases = PHASES,
@@ -214,21 +187,19 @@ export async function reflect(userId, {
     }
   };
 
-  // ── Phase 1: expire ── shrink everything downstream before it runs.
+  // ── Phase 1: expire ──
   await run("expire", async () => {
     if (dryRun) {
-      // Nothing to preview beyond a count; the backfill is unconditional.
       return { backfilled: 0, note: "dry run — no expiry written" };
     }
     const rows = await expireWorking(userId, { ttlHours });
     return { backfilled: rows.length };
   });
 
-  // ── Phase 2: contradict ── the original job.
+  // ── Phase 2: contradict ──
   await run("contradict", async () => {
     const candidates = await findContradictionCandidates(userId, { maxDistance, limit });
-    // Sequential on purpose: each judgement is a billed call and firing 20 at once
-    // invites a rate limit. At this volume the latency is irrelevant — it's a batch job.
+    // Sequential: each judgement is a billed call; 20 at once invites a rate limit.
     const decisions = [];
     for (const pair of candidates) {
       const verdict = await judgeContradiction(pair.older, pair.newer);
@@ -249,7 +220,7 @@ export async function reflect(userId, {
     };
   });
 
-  // ── Phase 3: merge ── collapse restatements into one consolidated memory.
+  // ── Phase 3: merge ──
   await run("merge", async () => {
     const clusters = await findMergeClusters(userId, { maxDistance: mergeDistance });
     const details = [];
@@ -260,8 +231,7 @@ export async function reflect(userId, {
       try {
         summary = await summarizeCluster(members);
       } catch (summarizeError) {
-        // Skip this cluster, leave its members untouched. A failed summary must never
-        // strand members pointing at a summary that was never written.
+        // Skip the cluster — never strand members pointing at a summary that failed.
         console.error("reflect(): summarizeCluster failed, skipping cluster:", summarizeError.message);
         details.push({ size: members.length, error: summarizeError.message });
         continue;
@@ -272,18 +242,16 @@ export async function reflect(userId, {
         continue;
       }
 
-      // Write the summary FIRST. Its id is what members point at, so a failure here
-      // leaves the store exactly as it was rather than half-merged.
+      // Summary first — members point at its id, so a failure leaves the store intact.
       const row = await writeMemory(summary.summary, {
         userId,
-        memoryType: "consolidated",   // explicit: never rely on inference for a synthetic row
-        importance: "high",           // it speaks for several memories, so it outranks any one
+        memoryType: "consolidated",
+        importance: "high",
         tags: summary.tags,
         metadata: { consolidated_from: members.map(m => m.id) },
       });
 
-      if (!row) {
-        // Dedup hit — this exact summary already exists. Nothing to point members at.
+      if (!row) {   // dedup hit — nothing to point members at
         details.push({ size: members.length, summary: summary.summary, wrote: false, note: "duplicate summary" });
         continue;
       }
@@ -300,7 +268,7 @@ export async function reflect(userId, {
     return { clusters: clusters.length, written, membersMarked, details };
   });
 
-  // ── Phase 4: tag ── facets for cheap filtered retrieval.
+  // ── Phase 4: tag ──
   await run("tag", async () => {
     const rows = await findUntagged(userId, { limit: tagLimit });
     if (rows.length === 0) return { examined: 0, updated: 0, assignments: [] };
@@ -322,12 +290,10 @@ export async function reflect(userId, {
     return { examined: rows.length, updated, assignments };
   });
 
-  // ── Phase 5: promote ── reward memories that keep proving useful.
+  // ── Phase 5: promote ──
   await run("promote", async () => {
     if (dryRun) {
-      // No preview query today: promote_hot.sql both selects and updates in one
-      // statement. Seeing the would-promote set needs its own SELECT — worth adding
-      // when the numbers get tuned, not before.
+      // No preview: promote_hot.sql selects and updates in one statement.
       return { promoted: 0, note: "dry run — no promotion written" };
     }
     const rows = await promoteHot(userId, { minAccess });

@@ -41,22 +41,13 @@ const VALID_TYPES = new Set(["episodic", "semantic", "procedural", "working", "c
 const CLASSIFY_MARGIN = 0.05; // fallback only: semantic must clearly beat episodic to win
 
 async function inferMemoryType(embedding) {
-  // Was referencing SEMANTIC_PROTOTYPE / EPISODIC_PROTOTYPE, which are not defined
-  // anywhere — the real vectors come from getPrototypes(). Any caller that omitted
-  // memoryType hit a ReferenceError instead of a fallback. Reflection writes always
-  // pass the type explicitly, but the fallback has to actually work before this file
-  // gains a second class of writer.
   const { semantic, episodic } = await getPrototypes();
   const semScore = similarity(embedding, semantic);
   const epiScore = similarity(embedding, episodic);
   return semScore - epiScore > CLASSIFY_MARGIN ? "semantic" : "episodic";
 }
 
-// tags / metadata / expiresAt are the reflection-era additions. Every one of them maps
-// to a column that has existed since 01 with no writer:
-//   tags      -> facet retrieval (08's p_tags filter reads it)
-//   metadata  -> lifecycle flags (consolidated_from on a summary, promoted_at on a bump)
-//   expiresAt -> working memories; NULL still means "durable, never expires"
+// tags / metadata / expiresAt: reflection-era additions. NULL expiresAt = durable.
 export async function writeMemory(content, {
   userId, memoryType, importance = "medium", id, createdAt,
   tags = [], metadata = {}, expiresAt = null,
@@ -71,8 +62,6 @@ export async function writeMemory(content, {
   const embedding = await getEmbedding(content);
 
   // --- Authoritative if the caller passed it; inferred only as a last resort.
-  // The await matters: inferMemoryType is async, and without it `type` was a Promise
-  // being handed to the driver as a memory_type value.
   const type = memoryType ?? await inferMemoryType(embedding);
 
   // --- Upsert - converted from .upsert function into the raw INSERT ... on CONFLICT it translates to

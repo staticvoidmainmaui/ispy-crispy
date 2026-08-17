@@ -1,36 +1,16 @@
-// The SQL operations ReflectAgent needs. One thin wrapper per .sql file, no logic
-// beyond argument checks and shaping the return.
-//
-// Return-shape convention: a query that can match many rows returns `rows`; a query
-// keyed on a unique id or guarded by a do-nothing clause returns `rows[0] ?? null`.
+// The SQL operations ReflectAgent needs. One thin wrapper per .sql file.
+// Return shape: many rows -> `rows`; unique key or do-nothing guard -> `rows[0] ?? null`.
 
 import { pool } from "../db/pool.mjs";
 import { loadSql, sqlDir } from "../db/sql.mjs";
 
 const SQL = sqlDir(import.meta.url);
 
-// ── Distance thresholds — MEASURED, not guessed ──────────────────────────────
-// Embedded hand-built pairs against Bedrock Titan and compared cosine distance:
-//   restatement   0.07 – 0.10   ("I like Thai food" / "Thai food is my favorite")
-//   contradiction 0.36 – 0.76   ("I prefer mornings" / "I prefer afternoons now")
-//   unrelated     0.66 – 0.92   ("I hate mornings" / "I prefer tea over coffee")
-//
-// Two conclusions, and they are not symmetric:
-//
-// MERGE is cleanly separable. Restatement tops out at 0.10 and the nearest
-// contradiction sits at 0.36, so 0.15 has room on both sides.
-//
-// CONTRADICTION is NOT. Its band runs to 0.76 while unrelated starts at 0.66 — they
-// OVERLAP, so no threshold divides them. The Haiku judge is the real filter; this
-// number only bounds how many pairs we pay to judge. 0.75 keeps recall high and
-// accepts that some judged pairs come back "compatible". Tightening it does not buy
-// precision, it just silently drops real contradictions.
-//
-// Titan's distances are compressed into a narrow high band, so numbers tuned for
-// MiniLM do not transfer. The old defaults were wrong in both directions: 0.25 here
-// (below EVERY contradiction — reflection was a silent no-op) and 0.85 in
-// reflectAgent (deep into unrelated noise).
-const DEFAULT_MAX_DISTANCE = 0.75;  // contradiction gate
+// ── Distance thresholds ──────────────────────────────────────────────────────
+// Measured on Titan: restatement 0.07-0.10, contradiction 0.36-0.76, unrelated 0.66-0.92.
+// Contradiction and unrelated OVERLAP — the judge is the real filter, this only
+// bounds how many pairs get judged. See docs/practices/reflection_thresholds.md.
+const DEFAULT_MAX_DISTANCE = 0.75;   // contradiction gate
 const DEFAULT_MERGE_DISTANCE = 0.15; // restatement / cluster gate
 const DEFAULT_LIMIT = 20;
 
@@ -39,7 +19,6 @@ export async function findContradictionCandidates(userId,
   { maxDistance = DEFAULT_MAX_DISTANCE, limit = DEFAULT_LIMIT } = {},
 ) {
   if (!userId) throw new Error("findContradictionCandidates(): consolidation requires a userId. ");
-  //   Param order must match the $1/$2/$3 in the file: id, max distance, and limit. Return rows.
   const { rows } = await pool.query(
     loadSql(SQL, "contradiction_candidates"),
     [userId, maxDistance, limit] //input parameters
@@ -67,15 +46,7 @@ export async function findActiveUsers({ lookbackDays = 7 } = {}) {
 }
 
 // ── findMergeClusters ────────────────────────────────────────────────────────
-// Edges in, CLUSTERS out. The SQL returns pairs; grouping happens here.
-//
-// Single-linkage via union-find: if A~B and B~C then A, B and C are one cluster, even
-// when A and C are further apart than the threshold. That transitivity is the point —
-// three ways of saying the same thing should collapse into one summary, not two.
-//
-// Why Node and not SQL: transitive closure is a recursive CTE and this is a nightly
-// batch job, not a ranking query. Pattern #8 puts RANKING in SQL; it doesn't demand
-// every algorithm live there.
+// Edges in, clusters out. Single-linkage union-find: A~B and B~C => one cluster.
 export async function findMergeClusters(userId, {
   maxDistance = DEFAULT_MERGE_DISTANCE, limit = 200, minSize = 2,
 } = {}) {
@@ -87,7 +58,7 @@ export async function findMergeClusters(userId, {
   );
   if (rows.length === 0) return [];
 
-  // Union-find with path compression. `parent` maps id -> representative id.
+  // Union-find with path compression.
   const parent = new Map();
   const find = (x) => {
     if (!parent.has(x)) parent.set(x, x);
@@ -98,8 +69,7 @@ export async function findMergeClusters(userId, {
   };
   const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent.set(ra, rb); };
 
-  // Keep content alongside the ids — the summarizer needs the text, and re-reading
-  // it from the DB would be a second round-trip for data we already have.
+  // Keep content alongside the ids — the summarizer needs the text.
   const contentById = new Map();
   for (const r of rows) {
     contentById.set(r.a_id, r.a_content);
@@ -114,8 +84,7 @@ export async function findMergeClusters(userId, {
     byRoot.get(root).push({ id, content: contentById.get(id) });
   }
 
-  // Biggest clusters first: they carry the most redundancy, so if a run is cut short
-  // by the pair limit the highest-value merges are the ones that happened.
+  // Biggest clusters first — most redundancy removed if a run is cut short.
   return [...byRoot.values()]
     .filter(members => members.length >= minSize)
     .sort((a, b) => b.length - a.length);
@@ -154,8 +123,6 @@ export async function setTags(memoryId, tags) {
 }
 
 // ── promoteHot ───────────────────────────────────────────────────────────────
-// The durable half of promotion: bump importance one step for memories recalled
-// often enough to have proven they matter.
 export async function promoteHot(userId, { minAccess = 5 } = {}) {
   if (!userId) throw new Error("promoteHot(): requires a userId.");
   const { rows } = await pool.query(loadSql(SQL, "promote_hot"), [userId, minAccess]);

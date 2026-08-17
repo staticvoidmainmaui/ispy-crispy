@@ -1,8 +1,5 @@
--- Record that these memories were just recalled adding a touch of freshness. The promotion signal's raw input.
+-- Bump recall counters. Fire-and-forget from recall(), not awaited.
 -- $1 = ids (uuid[])
---
--- Called fire-and-forget from recall() — NOT awaited. A read path must never wait on
--- a write it doesn't need. One statement for the whole hit set (= any($1)).
 
 update memories
 set access_count     = access_count + 1,

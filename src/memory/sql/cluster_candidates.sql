@@ -1,18 +1,6 @@
--- Edges of the near-duplicate graph: pairs of a user's semantic memories close enough
--- in vector space to be saying the same thing. Node assembles these into clusters.
+-- Near-duplicate edges (restatements). Node groups these into clusters via union-find.
+-- Sibling of contradiction_candidates.sql: that one finds CONFLICTS, this finds RESTATEMENTS.
 -- $1 = user_id (uuid)   $2 = max_distance (float)   $3 = limit (int)
---
--- Sibling of contradiction_candidates.sql, and the distinction is the whole point:
---   contradiction -> two memories that CONFLICT   ("I love mornings" / "I hate mornings")
---   cluster       -> two memories that RESTATE    ("I like Thai" / "Thai food is my favorite")
--- Restatement is the case the contradiction judge is explicitly told to pass on, so
--- those pairs would otherwise accumulate forever. Same neighbourhood, tighter radius.
---
--- This returns EDGES, not clusters. Single-linkage grouping happens in Node (union-find):
--- transitive closure is awkward in SQL, and this is a nightly batch job, not a ranking
--- query — pattern #8 puts RANKING in SQL, it doesn't put every algorithm there.
---
--- Both directions are not returned: a.created_at < b.created_at fixes each edge once.
 
 select
   a.id      as a_id,

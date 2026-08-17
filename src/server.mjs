@@ -55,16 +55,13 @@ app.post("/chat", async (req, res) => {
   // alongside the reply. Off by default, so the production response is unchanged.
   const debug = req.query.debug === "1";
 
-  // Deterministic tool failure, for the eval's degradation case. Gated behind debug=1
-  // so the production path can never be told to break itself by a stray header.
+  // Deterministic tool failure for the eval. debug=1 only.
   const ctx = debug ? { forceFail: req.get("x-tools-force-fail") ?? null } : {};
 
   try {
     const trace = {};
     const reply = await handleMessage(message, userId, debug ? trace : null, created_at, ctx);
-    // `tools` is the tool-chain half of the side-channel: which tools ran, with what
-    // arguments. The arguments are the interesting part — they're the proof a memory
-    // supplied the parameter rather than the user's sentence.
+    // `tools` = which tools ran, with what arguments.
     return res.json(debug ? { reply, hits: trace.hits ?? [], tools: trace.tools ?? [] } : { reply });
   }
   catch (error) {
