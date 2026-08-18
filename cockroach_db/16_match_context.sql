@@ -52,10 +52,12 @@ as $$
   with
   -- ── one bounded top-K per kind ──
   -- `(p_kinds is null or …)` is a constant predicate: an unrequested kind returns empty.
-  mem as (
-    select 'memory'::entity_kind as kind, m.id, m.content, m.memory_type, m.tags,
-           (m.embedding <=> query_embedding) as distance,
-           m.created_at as anchor_at, m.importance, m.access_count
+  -- The column list is EXPLICIT on all five and must stay that way: the union resolves by
+  -- NAME, and an unnamed `null::memory_type` or distance expression is not a column.
+  mem (kind, id, content, memory_type, tags, distance, anchor_at, importance, access_count) as (
+    select 'memory'::entity_kind, m.id, m.content, m.memory_type, m.tags,
+           (m.embedding <=> query_embedding),
+           m.created_at, m.importance, m.access_count
     from memories m
     where (p_kinds is null or 'memory'::entity_kind = any(p_kinds))
       and m.user_id = p_user_id
@@ -70,7 +72,7 @@ as $$
     order by m.embedding <=> query_embedding
     limit p_per_kind
   ),
-  cal as (
+  cal (kind, id, content, memory_type, tags, distance, anchor_at, importance, access_count) as (
     select 'calendar_event'::entity_kind, c.id, c.content, null::memory_type, c.tags,
            (c.embedding <=> query_embedding),
            c.starts_at, c.importance, c.access_count
@@ -85,7 +87,7 @@ as $$
     order by c.embedding <=> query_embedding
     limit p_per_kind
   ),
-  tsk as (
+  tsk (kind, id, content, memory_type, tags, distance, anchor_at, importance, access_count) as (
     select 'task'::entity_kind, t.id, t.content, null::memory_type, t.tags,
            (t.embedding <=> query_embedding),
            coalesce(t.due_at, t.created_at), t.importance, t.access_count
@@ -99,7 +101,7 @@ as $$
     order by t.embedding <=> query_embedding
     limit p_per_kind
   ),
-  sig as (
+  sig (kind, id, content, memory_type, tags, distance, anchor_at, importance, access_count) as (
     select 'signal'::entity_kind, s.id, s.content, null::memory_type, s.tags,
            (s.embedding <=> query_embedding),
            s.occurred_at, s.importance, s.access_count
@@ -114,7 +116,7 @@ as $$
     order by s.embedding <=> query_embedding
     limit p_per_kind
   ),
-  ofr as (
+  ofr (kind, id, content, memory_type, tags, distance, anchor_at, importance, access_count) as (
     select 'offer'::entity_kind, o.id, o.content, null::memory_type, o.tags,
            (o.embedding <=> query_embedding),
            o.created_at, o.importance, o.access_count
