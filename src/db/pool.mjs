@@ -44,4 +44,24 @@ export async function query(text, params) {
   }
 }
 
+// ─── withTransaction(fn) ─── one atomic unit.
+// Checks out ONE client so every statement lands on the same connection — pool.query()
+// picks an arbitrary one per call, so BEGIN and COMMIT would land on different sessions.
+// Never hold this open across a network call (Bedrock, Anthropic): embed first, then BEGIN.
+export async function withTransaction(fn) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await fn(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK").catch(rollbackError =>
+      console.error("withTransaction(): ROLLBACK failed:", rollbackError.message));
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 export const toVectorLiteral = (v) => `[${v.join(",")}]`;
