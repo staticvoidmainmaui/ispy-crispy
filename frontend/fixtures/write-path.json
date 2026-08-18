@@ -1,0 +1,11 @@
+{
+  "meta": { "label": "write-path", "phase": "done",
+            "note": "no run, no context, runId null \u2014 suppress the rail",
+            "prompt": "Dentist next Tuesday 4:30pm in Oakland." },
+  "frames": [
+    { "event": "text", "data": { "v": 1, "runId": null,
+      "delta": "Saved \u2014 Dentist, Tue 18 Aug, 16:30\u201317:15, Oakland." }},
+    { "event": "done", "data": { "v": 1, "runId": null,
+      "status": "ok", "latencyMs": 706, "counts": { "hits": 0, "tools": 0, "proposals": 0 } }}
+  ]
+}

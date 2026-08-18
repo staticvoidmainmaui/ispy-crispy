@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ispy-crispy</title>
+  <link rel="stylesheet" href="./app.css">
+</head>
+<body>
+
+<div class="shell" id="shell" data-rail="off">
+
+  <!-- ══ SIDEBAR ══ -->
+  <aside class="side">
+    <div class="brand">
+      <span class="led" id="led" data-phase="idle"></span>
+      <span>ispy-crispy</span>
+    </div>
+
+    <div class="scroller">
+      <nav>
+        <a href="#" aria-current="page"><i>&gt;</i> new chat</a>
+        <a href="#"><i>▤</i> brief</a>
+        <a href="#"><i>◫</i> chats</a>
+        <a href="#"><i>⟳</i> runs</a>
+        <a href="#"><i>◈</i> memory</a>
+        <a href="#"><i>⚑</i> actions</a>
+      </nav>
+
+      <p class="sect">recent</p>
+      <div class="recent">
+        <button type="button">plan my day tomorrow</button>
+        <button type="button">what's on this week?</button>
+        <button type="button">find me running shoes</button>
+        <button type="button">dentist next tuesday</button>
+      </div>
+
+      <!-- dev block: the fixture picker. Every screen state in one sitting. -->
+      <section class="dev">
+        <header>
+          <span>fixture</span>
+          <span id="phase-label">idle</span>
+        </header>
+        <div class="fixtures" id="fixtures"></div>
+        <footer>
+          <button type="button" id="replay">▶ replay</button>
+          <button type="button" id="theme">◐ theme</button>
+        </footer>
+      </section>
+    </div>
+
+    <div class="usage" id="usage"></div>
+  </aside>
+
+  <!-- ══ CHAT ══ -->
+  <main class="chat">
+    <div class="chat-scroll" id="chat-scroll">
+      <div class="col" id="col"></div>
+    </div>
+
+    <div class="composer">
+      <div class="box">
+        <input id="composer-input" placeholder="write a message" autocomplete="off">
+        <div class="bar">
+          <button type="button" title="attach">+</button>
+          <span class="sp"></span>
+          <span>claude-opus-5</span>
+          <span>·</span>
+          <span>protocol v1</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ══ CONTEXT RAIL ══ -->
+  <aside class="rail">
+    <header>
+      <h2>context</h2>
+      <span class="n" id="rail-count"></span>
+    </header>
+    <div class="body" id="rail-body"></div>
+  </aside>
+
+</div>
+
+<script type="module" src="./main.mjs"></script>
+</body>
+</html>

@@ -5,21 +5,21 @@
 # Percent-encode special characters in the password (@ becomes %40).
 DATABASE_URL=postgresql://<user>:<password>@<cluster>.<region>.cockroachlabs.cloud:26257/defaultdb?application_name=ispy-specmem&sslmode=verify-full
 
-# ── Supabase (the port SOURCE ) ──
-SUPABASE_URL=https://your-project-ref.supabase.co
-SUPABASE_API_KEY=your-supabase-api-key
-
 # ── Anthropic ──
 ANTHROPIC_API_KEY=your-anthropic-api-key
+
+# Override the tool-turn model. Haiku by default — the chain is up to 6 round trips.
+# TOOL_MODEL=claude-haiku-4-5
 
 # ── CockroachDB MCP (dev-time schema inspection, see .mcp.json) ──
 # Service account token, read-only. Migrations are still applied by hand.
 COCKROACH_MCP_TOKEN=your-cockroach-service-account-token
 
-# ── AWS DynamoDB──
+# ── AWS Bedrock (embeddings) ──
+# DynamoDB is retired — events live in CockroachDB (cockroach_db/11_calendar_events.sql).
 AWS_REGION=us-east-1
 EMBEDDING_PROVIDER=titan
-EVENTS_TABLE_NAME=events
 
-# LOCAL DEV ONLY. Set = DynamoDB Local. Unset = real AWS DynamoDB.
-DYNAMODB_ENDPOINT=http://localhost:8000
+# ── Ingest webhook (n8n / LangChain -> POST /ingest/:kind) ──
+# Unset CLOSES the endpoint rather than opening it.
+INGEST_TOKEN=a-long-random-string

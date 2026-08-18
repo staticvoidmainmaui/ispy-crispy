@@ -1,0 +1,36 @@
+{
+  "meta": { "label": "dropped", "phase": "dropped", "closesWithoutDone": true,
+            "note": "tool_start never paired, stream cut \u2014 not a failure",
+            "prompt": "Plan my day tomorrow." },
+  "frames": [
+    { "event": "run", "data": { "v": 1, "runId": "d5719ac2-8f34-4e60-a1b9-2c88e470f5d3",
+      "userId": "00000000-0000-0000-0000-000000000001",
+      "startedAt": "2026-08-17T21:19:33.551Z" }},
+    { "event": "context", "data": { "v": 1, "runId": "d5719ac2-8f34-4e60-a1b9-2c88e470f5d3",
+      "hits": [
+        { "rank": 0, "kind": "task", "id": "b73f1c88-40de-4a92-8f31-6d0e5a9c7b14",
+          "content": "Book the client dinner for the Okafor review",
+          "memory_type": null, "tags": ["work", "social"],
+          "distance": 0.38, "relevance": 1.0, "recency": 0.94, "frequency": 0.22, "score": 1.021 },
+        { "rank": 1, "kind": "signal", "id": "a0c7d219-5b84-4e31-9f0a-3d2c8b71e4f6",
+          "content": "BART Orange Line single-tracking 06:00-10:00 Fri, Oakland",
+          "memory_type": null, "tags": ["travel"],
+          "distance": 0.44, "relevance": 0.903, "recency": 0.99, "frequency": 0.0, "score": 0.929 },
+        { "rank": 2, "kind": "offer", "id": "5c1e8b40-77a2-4d36-9e0b-1f4a2c6d8093",
+          "content": "Neutral daily trainer, 10.5, $128 \u2014 in stock",
+          "memory_type": null, "tags": ["preference"],
+          "distance": 0.71, "relevance": 0.468, "recency": 0.40, "frequency": 0.0, "score": 0.448 }
+      ] }},
+    { "event": "tool_start", "data": { "v": 1, "runId": "d5719ac2-8f34-4e60-a1b9-2c88e470f5d3",
+      "seq": 1, "iteration": 1, "name": "get_calendar",
+      "input": { "from": "2026-08-18T00:00:00Z", "to": "2026-08-19T00:00:00Z" } }},
+    { "event": "tool_start", "data": { "v": 1, "runId": "d5719ac2-8f34-4e60-a1b9-2c88e470f5d3",
+      "seq": 2, "iteration": 1, "name": "recall_more",
+      "input": { "query": "standing dinner arrangements", "kinds": ["memory", "task"] } }},
+    { "event": "tool_end", "data": { "v": 1, "runId": "d5719ac2-8f34-4e60-a1b9-2c88e470f5d3",
+      "seq": 1, "ok": true, "ms": 137,
+      "output": [ { "id": "7b2e5f61-0c94-4a3d-b8e2-91af6d30c455", "title": "Dentist",
+                    "starts_at": "2026-08-18T16:30:00Z", "ends_at": "2026-08-18T17:15:00Z",
+                    "location": "Oakland" } ] }}
+  ]
+}

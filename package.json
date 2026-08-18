@@ -11,14 +11,12 @@
     "reflect": "node --env-file=.env scripts/run-reflect.mjs",
     "bundle:reflect": "node scripts/deploy-reflect.mjs bundle",
     "deploy:reflect": "node scripts/deploy-reflect.mjs commands",
-    "demo:isolation": "node --env-file=.env scripts/seed-isolation-demo.mjs"
+    "demo:isolation": "node --env-file=.env scripts/seed-isolation-demo.mjs",
+    "ui": "node frontend/serve.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
     "@aws-sdk/client-bedrock-runtime": "^3.1109.0",
-    "@aws-sdk/client-dynamodb": "^3.1081.0",
-    "@aws-sdk/lib-dynamodb": "^3.1081.0",
-    "@supabase/supabase-js": "^2.110.0",
     "chrono-node": "^2.9.1",
     "express": "^5.2.1",
     "pg": "^8.23.0"

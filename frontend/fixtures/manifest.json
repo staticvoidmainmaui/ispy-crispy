@@ -1,0 +1,10 @@
+{
+  "fixtures": [
+    { "file": "mid-stream.json",     "label": "mid-stream",     "phase": "answering", "note": "forecast failed \u00b7 proposal pending" },
+    { "file": "plan-my-day.json",    "label": "plan-my-day",    "phase": "done",      "note": "5 tools \u00b7 40 skipped" },
+    { "file": "no-hits.json",        "label": "no-hits",        "phase": "done",      "note": "hits: [] \u2014 correct, not empty" },
+    { "file": "retrieval-down.json", "label": "retrieval-down", "phase": "failed",    "note": "memory store unreachable" },
+    { "file": "write-path.json",     "label": "write-path",     "phase": "done",      "note": "no run \u00b7 no rail" },
+    { "file": "dropped.json",        "label": "dropped",        "phase": "dropped",   "note": "stream cut mid-chain" }
+  ]
+}

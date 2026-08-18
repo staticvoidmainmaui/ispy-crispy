@@ -1,0 +1,317 @@
+{
+  "meta": {
+    "label": "plan-my-day",
+    "phase": "done",
+    "note": "happy path · 5 tools · 1 proposal · 40 skipped",
+    "prompt": "Plan my day tomorrow."
+  },
+  "frames": [
+    {
+      "event": "run",
+      "data": {
+        "v": 1,
+        "runId": "9f2c1e7a-4b30-4d81-8a55-6c1f0e2b7d94",
+        "userId": "00000000-0000-0000-0000-000000000001",
+        "startedAt": "2026-08-17T21:04:11.382Z"
+      }
+    },
+    {
+      "event": "context",
+      "data": {
+        "v": 1,
+        "runId": "9f2c1e7a-4b30-4d81-8a55-6c1f0e2b7d94",
+        "hits": [
+          {
+            "rank": 0,
+            "kind": "memory",
+            "id": "c41d8a02-77e5-4f19-9b3a-2e5d84c11907",
+            "content": "I schedule deep work in the afternoon now, mornings stopped working for me",
+            "memory_type": "semantic",
+            "tags": [
+              "routine",
+              "work"
+            ],
+            "distance": 0.31,
+            "relevance": 1,
+            "recency": 0.83,
+            "frequency": 0.55,
+            "score": 1.054
+          },
+          {
+            "rank": 1,
+            "kind": "calendar_event",
+            "id": "7b2e5f61-0c94-4a3d-b8e2-91af6d30c455",
+            "content": "Dentist on 2026-08-18T16:30:00Z at Oakland",
+            "memory_type": null,
+            "tags": [
+              "health"
+            ],
+            "distance": 0.42,
+            "relevance": 0.841,
+            "recency": 1,
+            "frequency": 0.181,
+            "score": 0.957
+          },
+          {
+            "rank": 2,
+            "kind": "memory",
+            "id": "18f0c7bb-3d52-4e07-a1c6-5b9047ee2a83",
+            "content": "I go to the gym at 5pm on days it rains",
+            "memory_type": "semantic",
+            "tags": [],
+            "distance": 0.47,
+            "relevance": 0.768,
+            "recency": 0.61,
+            "frequency": 0,
+            "score": 0.771
+          }
+        ]
+      }
+    },
+    {
+      "event": "tool_start",
+      "data": {
+        "v": 1,
+        "runId": "9f2c1e7a-4b30-4d81-8a55-6c1f0e2b7d94",
+        "seq": 1,
+        "iteration": 1,
+        "name": "get_calendar",
+        "input": {
+          "from": "2026-08-18T00:00:00Z",
+          "to": "2026-08-19T00:00:00Z"
+        }
+      }
+    },
+    {
+      "event": "tool_end",
+      "data": {
+        "v": 1,
+        "runId": "9f2c1e7a-4b30-4d81-8a55-6c1f0e2b7d94",
+        "seq": 1,
+        "ok": true,
+        "ms": 141,
+        "output": [
+          {
+            "id": "7b2e5f61-0c94-4a3d-b8e2-91af6d30c455",
+            "title": "Dentist",
+            "starts_at": "2026-08-18T16:30:00Z",
+            "ends_at": "2026-08-18T17:15:00Z",
+            "location": "Oakland"
+          },
+          {
+            "id": "2d81b0c3-19ae-4f57-8c60-4a7ee1b39f22",
+            "title": "Gym",
+            "starts_at": "2026-08-18T07:00:00Z",
+            "ends_at": "2026-08-18T08:00:00Z",
+            "location": null
+          }
+        ]
+      }
+    },
+    {
+      "event": "tool_start",
+      "data": {
+        "v": 1,
+        "runId": "9f2c1e7a-4b30-4d81-8a55-6c1f0e2b7d94",
+        "seq": 2,
+        "iteration": 2,
+        "name": "geocode_place",
+        "input": {
+          "place": "Oakland"
+        }
+      }
+    },
+    {
+      "event": "tool_start",
+      "data": {
+        "v": 1,
+        "runId": "9f2c1e7a-4b30-4d81-8a55-6c1f0e2b7d94",
+        "seq": 3,
+        "iteration": 2,
+        "name": "search_signals",
+        "input": {
+          "since": "2026-08-16T21:04:11Z",
+          "limit": 5
+        }
+      }
+    },
+    {
+      "event": "tool_end",
+      "data": {
+        "v": 1,
+        "runId": "9f2c1e7a-4b30-4d81-8a55-6c1f0e2b7d94",
+        "seq": 2,
+        "ok": true,
+        "ms": 312,
+        "output": {
+          "name": "Oakland, Alameda County, California",
+          "latitude": 37.8044,
+          "longitude": -122.2712
+        }
+      }
+    },
+    {
+      "event": "tool_end",
+      "data": {
+        "v": 1,
+        "runId": "9f2c1e7a-4b30-4d81-8a55-6c1f0e2b7d94",
+        "seq": 3,
+        "ok": true,
+        "ms": 188,
+        "output": {
+          "items": [
+            {
+              "id": "a0c7d219-5b84-4e31-9f0a-3d2c8b71e4f6",
+              "title": "BART Orange Line single-tracking Friday",
+              "content": "BART Orange Line single-tracking 06:00-10:00 Fri, Oakland",
+              "url": "https://bart.gov/alerts/2026-08-18",
+              "source": "bart-alerts",
+              "occurred_at": "2026-08-17T18:40:00Z",
+              "cited_memory_id": "7b2e5f61-0c94-4a3d-b8e2-91af6d30c455",
+              "citation": "Dentist on 2026-08-18T16:30:00Z at Oakland",
+              "affinity": 0.44
+            }
+          ],
+          "considered": 43,
+          "skipped": 40,
+          "gate": 0.62
+        }
+      }
+    },
+    {
+      "event": "text",
+      "data": {
+        "v": 1,
+        "runId": "9f2c1e7a-4b30-4d81-8a55-6c1f0e2b7d94",
+        "delta": "Checking the weather before I order the day — "
+      }
+    },
+    {
+      "event": "tool_start",
+      "data": {
+        "v": 1,
+        "runId": "9f2c1e7a-4b30-4d81-8a55-6c1f0e2b7d94",
+        "seq": 4,
+        "iteration": 3,
+        "name": "get_forecast",
+        "input": {
+          "latitude": 37.8044,
+          "longitude": -122.2712,
+          "date": "2026-08-18"
+        }
+      }
+    },
+    {
+      "event": "tool_end",
+      "data": {
+        "v": 1,
+        "runId": "9f2c1e7a-4b30-4d81-8a55-6c1f0e2b7d94",
+        "seq": 4,
+        "ok": false,
+        "ms": 2504,
+        "error": "forecast: unreachable (timed out)"
+      }
+    },
+    {
+      "event": "text",
+      "data": {
+        "v": 1,
+        "runId": "9f2c1e7a-4b30-4d81-8a55-6c1f0e2b7d94",
+        "delta": "the forecast service didn't answer, so I'm going off what you've told me rather than guessing at the sky.\n\n"
+      }
+    },
+    {
+      "event": "text",
+      "data": {
+        "v": 1,
+        "runId": "9f2c1e7a-4b30-4d81-8a55-6c1f0e2b7d94",
+        "delta": "Your morning gym block at 7am collides with the deep-work rule you set — "
+      }
+    },
+    {
+      "event": "tool_start",
+      "data": {
+        "v": 1,
+        "runId": "9f2c1e7a-4b30-4d81-8a55-6c1f0e2b7d94",
+        "seq": 5,
+        "iteration": 4,
+        "name": "propose_calendar_change",
+        "input": {
+          "action": "move_event",
+          "event_id": "2d81b0c3-19ae-4f57-8c60-4a7ee1b39f22",
+          "title": "Gym",
+          "starts_at": "2026-08-18T17:00:00Z",
+          "ends_at": "2026-08-18T18:00:00Z",
+          "rationale": "You told me you go at 5pm on rainy days, and mornings are your deep-work block now"
+        }
+      }
+    },
+    {
+      "event": "proposal",
+      "data": {
+        "v": 1,
+        "runId": "9f2c1e7a-4b30-4d81-8a55-6c1f0e2b7d94",
+        "id": "3ac9d114-6e28-49b7-90fd-c7b21e5a8d60",
+        "action": "move_event",
+        "payload": {
+          "title": "Gym",
+          "starts_at": "2026-08-18T17:00:00Z",
+          "ends_at": "2026-08-18T18:00:00Z"
+        },
+        "before": {
+          "title": "Gym",
+          "starts_at": "2026-08-18T07:00:00Z",
+          "ends_at": "2026-08-18T08:00:00Z"
+        },
+        "rationale": "You told me you go at 5pm on rainy days, and mornings are your deep-work block now",
+        "status": "pending"
+      }
+    },
+    {
+      "event": "tool_end",
+      "data": {
+        "v": 1,
+        "runId": "9f2c1e7a-4b30-4d81-8a55-6c1f0e2b7d94",
+        "seq": 5,
+        "ok": true,
+        "ms": 96,
+        "output": {
+          "proposal_id": "3ac9d114-6e28-49b7-90fd-c7b21e5a8d60",
+          "status": "pending",
+          "action": "move_event"
+        }
+      }
+    },
+    {
+      "event": "text",
+      "data": {
+        "v": 1,
+        "runId": "9f2c1e7a-4b30-4d81-8a55-6c1f0e2b7d94",
+        "delta": "so I've queued it for 5pm instead. Nothing is written until you approve it.\n\n"
+      }
+    },
+    {
+      "event": "text",
+      "data": {
+        "v": 1,
+        "runId": "9f2c1e7a-4b30-4d81-8a55-6c1f0e2b7d94",
+        "delta": "Dentist stays at 16:30 in Oakland. One thing worth knowing: BART's Orange Line is single-tracking 06:00–10:00, which is why the morning move helps twice."
+      }
+    },
+    {
+      "event": "done",
+      "data": {
+        "v": 1,
+        "runId": "9f2c1e7a-4b30-4d81-8a55-6c1f0e2b7d94",
+        "status": "ok",
+        "latencyMs": 4187,
+        "counts": {
+          "hits": 3,
+          "tools": 5,
+          "proposals": 1,
+          "skipped": 40
+        }
+      }
+    }
+  ]
+}

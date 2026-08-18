@@ -1,0 +1,19 @@
+{
+  "meta": { "label": "retrieval-down", "phase": "failed",
+            "note": "error RETRIEVAL \u2192 done status:error",
+            "prompt": "Plan my day tomorrow." },
+  "frames": [
+    { "event": "run", "data": { "v": 1, "runId": "6e0a4c33-9d18-4b72-8e51-77c2f0ab4d19",
+      "userId": "00000000-0000-0000-0000-000000000001",
+      "startedAt": "2026-08-17T21:14:48.910Z" }},
+    { "event": "error", "data": { "v": 1, "runId": "6e0a4c33-9d18-4b72-8e51-77c2f0ab4d19",
+      "domain": "RETRIEVAL",
+      "message": "function match_context(vector, uuid, entity_kind[], memory_type, int, int, text[], timestamptz) does not exist" }},
+    { "event": "text", "data": { "v": 1, "runId": "6e0a4c33-9d18-4b72-8e51-77c2f0ab4d19",
+      "delta": "I can start on tomorrow, but " }},
+    { "event": "error", "data": { "v": 1, "runId": "6e0a4c33-9d18-4b72-8e51-77c2f0ab4d19",
+      "domain": "TURN", "message": "Cannot read properties of null (reading 'hits')" }},
+    { "event": "done", "data": { "v": 1, "runId": "6e0a4c33-9d18-4b72-8e51-77c2f0ab4d19",
+      "status": "error", "latencyMs": 1043, "counts": { "hits": 0, "tools": 0, "proposals": 0 } }}
+  ]
+}

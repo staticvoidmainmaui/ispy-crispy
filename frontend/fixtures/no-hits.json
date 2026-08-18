@@ -1,0 +1,15 @@
+{
+  "meta": { "label": "no-hits", "phase": "done",
+            "note": "hitsLoaded, hits: [] \u2014 a real outcome, not a failure",
+            "prompt": "What's the capital of Uruguay?" },
+  "frames": [
+    { "event": "run", "data": { "v": 1, "runId": "41b8e05d-2c77-4a19-b3e6-0f5c9d81a220",
+      "userId": "00000000-0000-0000-0000-000000000001",
+      "startedAt": "2026-08-17T21:11:02.104Z" }},
+    { "event": "context", "data": { "v": 1, "runId": "41b8e05d-2c77-4a19-b3e6-0f5c9d81a220", "hits": [] }},
+    { "event": "text", "data": { "v": 1, "runId": "41b8e05d-2c77-4a19-b3e6-0f5c9d81a220",
+      "delta": "Montevideo. Nothing in your memory bore on that one \u2014 I answered from the model alone." }},
+    { "event": "done", "data": { "v": 1, "runId": "41b8e05d-2c77-4a19-b3e6-0f5c9d81a220",
+      "status": "ok", "latencyMs": 812, "counts": { "hits": 0, "tools": 0, "proposals": 0 } }}
+  ]
+}
