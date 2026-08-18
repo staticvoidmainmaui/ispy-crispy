@@ -242,5 +242,207 @@
         "get_weather"
       ]
     }
+  },
+  {
+    "id": "s6-plan-01",
+    "stage": "plan",
+    "seed": [
+      "I schedule deep work in the afternoon now, mornings stopped working for me",
+      "I go to the gym at 5pm on days it rains",
+      "schedule dentist tomorrow at 4:30pm at Oakland"
+    ],
+    "input": "Plan my day tomorrow.",
+    "expected": {
+      "min_tools": 3,
+      "tools_called": [
+        "get_calendar"
+      ],
+      "reply_must_not_match": "\\?\\s*$",
+      "reply_contains_any": [
+        "dentist",
+        "deep work",
+        "gym"
+      ]
+    }
+  },
+  {
+    "id": "s6-plan-02-no-writes",
+    "stage": "plan",
+    "seed": [
+      "I hate mornings, never book me before 11",
+      "schedule standup tomorrow at 9am"
+    ],
+    "input": "Move my standup tomorrow to the afternoon.",
+    "expected": {
+      "tools_called": [
+        "propose_calendar_change"
+      ],
+      "proposals_min": 1,
+      "proposals_all_pending": true
+    }
+  },
+  {
+    "id": "s7-digest-01",
+    "stage": "digest",
+    "seed": [
+      "I'm blocked on the retrieval service PR until it gets reviewed",
+      "I keep hitting vector index limits on CockroachDB"
+    ],
+    "ingest": [
+      {
+        "kind": "signal",
+        "items": [
+          {
+            "source": "eval:fixture",
+            "external_id": "sig-1",
+            "content": "Your pull request on the retrieval service was approved and merged",
+            "title": "PR approved: retrieval service"
+          },
+          {
+            "source": "eval:fixture",
+            "external_id": "sig-2",
+            "content": "CockroachDB shipped vector index tuning options in this release",
+            "title": "CockroachDB vector index tuning"
+          },
+          {
+            "source": "eval:fixture",
+            "external_id": "sig-3",
+            "content": "A local bakery announced new opening hours for the summer",
+            "title": "Bakery hours"
+          },
+          {
+            "source": "eval:fixture",
+            "external_id": "sig-4",
+            "content": "Weekly newsletter about houseplant care and repotting",
+            "title": "Houseplant weekly"
+          },
+          {
+            "source": "eval:fixture",
+            "external_id": "sig-5",
+            "content": "Municipal parking rates increase downtown next month",
+            "title": "Parking rates"
+          }
+        ]
+      }
+    ],
+    "input": "What happened today that matters to me?",
+    "expected": {
+      "tools_called": [
+        "search_signals"
+      ],
+      "tool_ok": {
+        "search_signals": true
+      },
+      "reply_contains_any": [
+        "pull request",
+        "pr",
+        "cockroachdb",
+        "vector index"
+      ]
+    }
+  },
+  {
+    "id": "s7-digest-02-nothing-matters",
+    "stage": "digest",
+    "seed": [
+      "I only care about my running training plan"
+    ],
+    "ingest": [
+      {
+        "kind": "signal",
+        "items": [
+          {
+            "source": "eval:fixture",
+            "external_id": "noise-1",
+            "content": "Quarterly tax filing deadlines for small businesses in Delaware",
+            "title": "Delaware tax deadlines"
+          },
+          {
+            "source": "eval:fixture",
+            "external_id": "noise-2",
+            "content": "New parking garage opens on the east side of the industrial district",
+            "title": "Parking garage"
+          }
+        ]
+      }
+    ],
+    "input": "What happened today that matters to me?",
+    "expected": {
+      "tools_called": [
+        "search_signals"
+      ],
+      "reply_must_not_match": "(?i)delaware|parking garage"
+    }
+  },
+  {
+    "id": "s8-shopping-01",
+    "stage": "shopping",
+    "seed": [
+      "I wear a size 10.5 running shoe",
+      "I need neutral support, not stability shoes",
+      "I've bought Brooks twice and liked them both times",
+      "the Nike toebox was too narrow for me"
+    ],
+    "ingest": [
+      {
+        "kind": "offer",
+        "items": [
+          {
+            "external_id": "off-1",
+            "retailer": "eval:fixture",
+            "content": "Brooks Ghost 16 neutral daily running trainer",
+            "brand": "Brooks",
+            "model": "Ghost 16",
+            "price_cents": 13000,
+            "size": "10.5",
+            "attributes": {
+              "support": "neutral"
+            },
+            "url": "https://example.test/cart/ghost16"
+          },
+          {
+            "external_id": "off-2",
+            "retailer": "eval:fixture",
+            "content": "Nike Pegasus 41 neutral daily running trainer",
+            "brand": "Nike",
+            "model": "Pegasus 41",
+            "price_cents": 14000,
+            "size": "10.5",
+            "attributes": {
+              "support": "neutral",
+              "toebox": "narrow"
+            },
+            "url": "https://example.test/cart/peg41"
+          },
+          {
+            "external_id": "off-3",
+            "retailer": "eval:fixture",
+            "content": "Brooks Adrenaline GTS 24 stability running shoe",
+            "brand": "Brooks",
+            "model": "Adrenaline GTS 24",
+            "price_cents": 14000,
+            "size": "10.5",
+            "attributes": {
+              "support": "stability"
+            },
+            "url": "https://example.test/cart/gts24"
+          }
+        ]
+      }
+    ],
+    "input": "I need new running shoes.",
+    "expected": {
+      "tools_called": [
+        "search_offers"
+      ],
+      "tool_ok": {
+        "search_offers": true
+      },
+      "reply_must_not_match": "(?i)what size|your size\\?|what's your size",
+      "reply_contains_any": [
+        "brooks",
+        "ghost"
+      ]
+    }
   }
 ]
