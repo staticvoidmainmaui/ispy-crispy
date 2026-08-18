@@ -2,9 +2,12 @@
 // question in -> embed it -> ask pgvector for the nearest stored memories -> return them.
 // This is your personal/recall.js, re-pointed at the upgraded `match_memories` RPC
 // (which now returns id + content + memory_type + distance, scoped by user_id).
+//
+// SUPERSEDED by recallContext.mjs, kept as the reader for 08's match_memories so the
+// single-table baseline stays runnable next to the five-table one. The DynamoDB hydration
+// step is gone — there is no second store to hydrate from (see 11_calendar_events.sql).
 import { pool, toVectorLiteral } from "../db/pool.mjs";
 import { loadSql, sqlDir } from "../db/sql.mjs";
-import { hydrateEvents } from "../events/eventsTable.mjs";
 import { getEmbedding } from "./embeddings.mjs";
 
 const SQL = sqlDir(import.meta.url);
@@ -33,25 +36,5 @@ export async function recall(query, { userId, topK = 3, memoryType = null } = {}
       .catch(err => console.error("recall(): access write-back failed (non-fatal):", err.message));
   }
 
-  let hydratedById;
-  try {
-    hydratedById = await hydrateEvents(data.map(row => row.id));
-  } catch (hydrationError) {
-    console.error(
-      "recall(): DynamoDB hydration failed — serving pgvector content only " +
-      "(events store unreachable, is DynamoDB Local running on :8000?):",
-      hydrationError
-    );
-    hydratedById = new Map(); // empty map => merge is a no-op => raw rows pass through
-  }
-
-  const mergedData = data.map(row => {
-    const hydrated = hydratedById.get(row.id);
-    if (hydrated) {
-      return { ...row, ...hydrated }; // prefer hydrated fields over stale content
-    }
-    return row; // if no hydrated record, keep the original row
-  });
-
-  return mergedData; 
+  return data;
 }
