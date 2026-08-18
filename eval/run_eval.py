@@ -20,6 +20,7 @@ import re         # toolchain cases assert a reply does NOT match a pattern
 import argparse   # parse --stage so you can score one pipeline stage at a time
 import uuid       # unique per-case userId, so cases can't pollute each other's recall
 from datetime import datetime, timedelta, timezone   # backdate seeded memories for recency tests
+import os         # INGEST_TOKEN for the signal/offer seeding path
 import requests   # our "curl in a loop"
 
 # ─── Config ──────────────────────────────────────────────────────────────────
@@ -29,6 +30,13 @@ BASE_URL = "http://localhost:3000" # matches PORT in src/config.mjs
 CHAT_ROUTE = "/chat"
 CASES_PATH = "eval/cases.json"
 DEV_USER = "00000000-0000-0000-0000-000000000001"  # matches DEV_USER in src/config.mjs
+
+# Stages that need ?debug=1 — they assert on `hits`, `tools` or `runId`, not on prose.
+DEBUG_STAGES = ("retrieval", "ranking", "toolchain", "plan", "digest", "shopping")
+
+# Ingest seeding (signals/tasks/offers) needs the same bearer the server checks.
+# Without it those stages can't seed and are skipped rather than silently failing.
+INGEST_TOKEN = os.environ.get("INGEST_TOKEN")
 
 
 # ─── PART 1: load the case bank ──────────────────────────────────────────────
@@ -67,6 +75,32 @@ def run_case(message, user=DEV_USER, debug=False, created_at=None, force_fail=No
     )
     resp.raise_for_status()   # a 500 from the server should fail loudly, not silently pass
     return resp.json()
+
+
+def seed_ingest(kind, user, items):
+    """
+    Seed signals/tasks/offers through the SAME webhook n8n uses. Not a DB insert — if the
+    ingest contract breaks, these cases break, which is the point.
+    """
+    resp = requests.post(
+        f"{BASE_URL}/ingest/{kind}",
+        json={"userId": user, "items": items},
+        headers={"Authorization": f"Bearer {INGEST_TOKEN}"},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def list_actions(user, run_id):
+    """What did this turn PROPOSE? The count that proves zero writes before approval."""
+    resp = requests.get(
+        f"{BASE_URL}/actions",
+        params={"userId": user, "runId": run_id},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json().get("actions", [])
 
 
 # ─── PART 3: score one reply against what we expected ────────────────────────
@@ -212,6 +246,12 @@ def toolchain_eval(case, actual):
     tool_ok             — {tool: bool}
     reply_must_not_match— regex that must NOT match the reply
     reply_contains_any  — at least one substring appears in the reply
+
+    Shared by the demo stages too (plan/digest/shopping), which add:
+    min_tools           — the chain was at least this long ("≥4 tools")
+    tool_output_has     — {tool: [field]} the tool RETURNED these, so the reply can cite them
+    proposals_min       — this many rows landed in proposed_actions for this run
+    proposals_all_pending — nothing was applied without approval
     """
     exp = case["expected"]
     tools = actual.get("tools") or []
@@ -252,6 +292,29 @@ def toolchain_eval(case, actual):
     if any_of and not any(s.lower() in reply for s in any_of):
         return False
 
+    if len(tools) < exp.get("min_tools", 0):
+        return False
+
+    for tool, fields in exp.get("tool_output_has", {}).items():
+        call = next((t for t in tools if t.get("name") == tool and t.get("ok")), None)
+        if call is None:
+            return False
+        # ?debug=1 exposes inputs but not outputs, so this asserts the call SUCCEEDED and
+        # the ledger row exists; the field check runs against whatever the trace carries.
+        output = call.get("output") or {}
+        for field in fields:
+            if field not in output:
+                return False
+
+    actions = actual.get("actions")
+    if "proposals_min" in exp:
+        if actions is None or len(actions) < exp["proposals_min"]:
+            return False
+    if exp.get("proposals_all_pending"):
+        # The invariant: the agent proposed, it did not write.
+        if any(a.get("status") != "pending" for a in (actions or [])):
+            return False
+
     return True
 
 
@@ -271,7 +334,8 @@ def score(case, actual):
     if case["stage"] == "ranking":
         return ranking_eval(case, actual)
 
-    if case["stage"] == "toolchain":
+    # The demo stages are toolchain cases with extra assertions — same scorer, same shape.
+    if case["stage"] in ("toolchain", "plan", "digest", "shopping"):
         return toolchain_eval(case, actual)
 
     raise NotImplementedError("score() not written yet — see TODOs above")
@@ -296,7 +360,11 @@ def main():
     # --stage scores ONE pipeline stage at a time, e.g. `--stage intent`.
     # Omit it to run every case. argparse gives us --help and bad-flag errors free.
     parser = argparse.ArgumentParser(description="Go Gators planner eval harness.")
-    parser.add_argument("--stage", help="only run cases whose stage matches (e.g. intent, extract, retrieval)")
+    parser.add_argument(
+        "--stage",
+        help="only run cases whose stage matches: "
+             "intent | extract | retrieval | ranking | toolchain | plan | digest | shopping",
+    )
     args = parser.parse_args()
 
     cases = load_cases(CASES_PATH)
@@ -305,6 +373,14 @@ def main():
         if not cases:   # a typo'd stage should say so, not silently print "0/0 passed"
             print(f'No cases with stage {args.stage!r} in {CASES_PATH}')
             return
+
+    # Cases that seed through /ingest need the bearer. Skipping loudly beats 3 confusing
+    # failures that look like a ranking regression.
+    if not INGEST_TOKEN:
+        needs_ingest = [c for c in cases if c.get("ingest")]
+        if needs_ingest:
+            print(f"skipping {len(needs_ingest)} case(s): INGEST_TOKEN not set in the environment")
+            cases = [c for c in cases if not c.get("ingest")]
 
     results = []
     for case in cases:
@@ -325,12 +401,21 @@ def main():
                 created_at = (datetime.now(timezone.utc) - timedelta(days=seed["age_days"])).isoformat()
                 run_case(seed["text"], user, created_at=created_at)
 
-        # retrieval/ranking need `hits`, toolchain needs `tools` — ask with debug on.
+        # Signals/tasks/offers seed through the ingest webhook, not through /chat.
+        for block in case.get("ingest", []):
+            seed_ingest(block["kind"], user, block["items"])
+
+        # retrieval/ranking need `hits`, the tool stages need `tools` — ask with debug on.
         actual = run_case(
             case["input"], user,
-            debug=(case["stage"] in ("retrieval", "ranking", "toolchain")),
+            debug=(case["stage"] in DEBUG_STAGES),
             force_fail=case.get("force_fail"),
         )  # RUN
+
+        # Proposal assertions read the ledger, not the prose.
+        if case["stage"] == "plan" and actual.get("runId"):
+            actual["actions"] = list_actions(user, actual["runId"])
+
         ok = score(case, actual)                                # SCORE
         results.append({**case, "actual": actual, "ok": ok})    # COLLECT
     report(results)                                             # REPORT
