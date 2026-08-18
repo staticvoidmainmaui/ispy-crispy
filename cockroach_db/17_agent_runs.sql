@@ -32,7 +32,7 @@ create table agent_runs (
   user_message  text not null,
   intent        text,
 
-  -- 'running' at turn start so SSE has a run_id immediately; terminal after the stream ends.
+  -- 'running' at turn start so SSE has a run_id immediately, done after the stream ends.
   status        run_status not null default 'running',
 
   model         text,

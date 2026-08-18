@@ -13,7 +13,7 @@ create or replace view context_all as
     select 'memory'::entity_kind as kind,
            id, user_id, content, embedding, importance, tags, metadata,
            access_count, last_accessed_at, expires_at, created_at,
-           created_at as anchor_at        -- per-kind time anchor; see 16
+           created_at as anchor_at        -- per-kind time anchor -  see 16
       from memories
   union all
     select 'calendar_event'::entity_kind,

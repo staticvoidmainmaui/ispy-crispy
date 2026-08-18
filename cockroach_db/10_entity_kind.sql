@@ -1,6 +1,5 @@
--- ─── The recallable contract ─── generalizes 01's shape past `memories`.
---
--- CONTRACT — copy verbatim into every recallable table. 15 unions on it, 16 ranks on it.
+-- ─── The recallable CONTRACT  ───
+--  inserts 'memories' "syntax/verbatim into every recallable table. 15 unions on it, 16 ranks on it.
 --
 --   id                uuid primary key default gen_random_uuid(),
 --   user_id           uuid not null,
@@ -14,8 +13,7 @@
 --   expires_at        timestamptz,                    -- NULL = forever
 --   created_at        timestamptz default now()
 --
--- Typed columns filter and render. `content` is the only thing embedded.
--- `memories` already satisfies this — no ALTER.
+-- Typed columns filter and render. `content` is the only thing embedded. (from memories)
 
 drop type if exists entity_kind;
 
