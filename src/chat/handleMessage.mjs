@@ -12,20 +12,22 @@
 //     Claude explicitly it's reference data, not directives.
 
 import Anthropic from "@anthropic-ai/sdk";
-import { recall } from "../memory/recall.mjs"; //recall for fetching relevant memories from supabase, uses dynamoDB for event details hydration
-import { createEvent } from "../events/createEvent.mjs"; // the "change data" leg: writes DynamoDB + episodic memory under one id
+import { recallContext } from "../memory/recallContext.mjs"; // ranks across every kind in one statement — one snapshot, not N stores
+import { createEvent } from "../entities/calendarEvents.mjs"; // the "change data" leg: one row in CockroachDB, no dual write
 import { writeMemory } from "../memory/writeMemory.mjs"; // step 2: the semantic-preference write (no event, Postgres only)
 import * as chrono from 'chrono-node';
 import { runToolTurn } from "./toolLoop.mjs"; // the agentic loop: memory -> tool args -> answer
+import { startRun, finishRun } from "../run/ledger.mjs"; // one auditable unit per turn
 
 const anthropic = new Anthropic(); // TODO 1: reads ANTHROPIC_API_KEY from process.env automatically — confirm your env loader actually sets it (node --env-file=...).
 
 
-const MODEL = "claude-sonnet-5"; // generation model (the reply). Higher quality, higher cost.
 const CLASSIFIER_MODEL = "claude-haiku-4-5"; // Tier-2 intent classifier: cheap + high-volume, so the smallest model.
 const DISTANCE_THRESHOLD = 0.6; // TODO 2: tune this. Hits with distance ABOVE this are noise, not context — drop them.
 
-// Tool-turn model. Haiku for latency: the chain is 3 sequential round-trips.
+// Tool-turn model. Haiku for latency: the chain is up to 6 sequential round-trips, and
+// docs/practices/tool_use_loop.md measured Sonnet busting a 3s budget on the second alone.
+// The env var is the quality lever if a plan reads thin.
 const TOOL_MODEL = process.env.TOOL_MODEL ?? "claude-haiku-4-5";
 
 // Appended to the system prompt only when memories were recalled.
@@ -45,6 +47,14 @@ const INTENT_SCHEMA = {
   required: ["intent"],
   additionalProperties: false,
 };
+
+// ─── classifyMessage(userMessage) → intent ───
+// The two-tier fork, exported so the SSE route can decide whether it is streaming an
+// answer or performing a write, without paying for the classification twice.
+export async function classifyMessage(userMessage) {
+  const tier1 = classifyIntent(userMessage);
+  return tier1 === UNCERTAIN ? classifyIntentLLM(userMessage) : tier1;
+}
 
 // ─── formatContext(hits) — turn recall() results into a fenced context block ───
 function formatContext(hits) {
@@ -242,7 +252,7 @@ function extractEventFields(userMessage) {
 // - Stage 1 (retrieval): its own try/catch → "RETRIEVAL failed (recall/Supabase/embedding)"
 // - Stage 2 (generation): its own try/catch → "GENERATION failed (anthropic.messages.create)"
 
-export async function handleMessage(userMessage, userId, trace = null, createdAt = null, ctx = {}) {
+export async function handleMessage(userMessage, userId, trace = null, createdAt = null, ctx = {}, knownIntent = null) {
   // Two distinct failure domains, so two distinct try/catch blocks. Previously a
   // single catch wrapped BOTH the recall (Supabase + DynamoDB) and the LLM call, and
   // it logged every failure as "Error calling anthropic.messages.create" — which sent
@@ -256,8 +266,7 @@ export async function handleMessage(userMessage, userId, trace = null, createdAt
   //
   // TWO-TIER: cheap regex first; escalate to the Claude classifier ONLY when Tier-1 is
   // uncertain, so the common case never pays for an LLM round-trip.
-  let intent = classifyIntent(userMessage);
-  if (intent === UNCERTAIN) intent = await classifyIntentLLM(userMessage);
+  const intent = knownIntent ?? await classifyMessage(userMessage);
 
   if (intent === "add_event") {
     const { title, time, location } = extractEventFields(userMessage);
@@ -317,6 +326,30 @@ export async function handleMessage(userMessage, userId, trace = null, createdAt
   }
 
   // ── QUESTION path ──
+  // Delegated so the SSE route can run the SAME path with an onEvent listener attached.
+  const answer = await answerQuestion({ userMessage, userId, trace, ctx, intent });
+  if (trace) trace.runId = answer.runId; // lets the eval ask /actions what this turn proposed
+  return answer.text;
+}
+
+// ─── answerQuestion({ ... }) → { text, runId, hits, toolCalls } ───
+// The read path, factored out of the intent fork. onEvent is optional: pass it and every
+// stage reports as it happens; omit it and this is exactly the buffered behaviour.
+export async function answerQuestion({
+  userMessage, userId, trace = null, ctx = {}, intent = "question", onEvent = null,
+}) {
+  const startedAt = Date.now();
+
+  // Opened before anything expensive so a listener has a run id immediately. A ledger
+  // outage must not cost the user an answer, so a failure here degrades to no audit row.
+  let run = null;
+  try {
+    run = await startRun({ userId, userMessage, intent, model: TOOL_MODEL });
+    onEvent?.({ type: "run", runId: run.id, userId, startedAt: run.started_at });
+  } catch (ledgerError) {
+    console.error("answerQuestion(): startRun failed (non-fatal):", ledgerError.message);
+  }
+
   // ── Stage 1: RETRIEVAL — FACETED (split) recall + fusion ──
   // Two targeted retrievals instead of one blended list — the whole reason we added the
   // p_memory_type pre-filter. Splitting by facet lets each content type get its own
@@ -324,22 +357,40 @@ export async function handleMessage(userMessage, userId, trace = null, createdAt
   //   - episodic: query-DRIVEN calendar facts relevant to THIS question (noise-gated).
   //   - semantic: AMBIENT standing preferences, always injected so they frame the answer.
   // The two RPCs are independent, so fire them in parallel and fuse the results.
+  //
+  // The scorer is now 16 (match_context), which normalizes relevance across each call's
+  // candidate set. The facet split survives the generalization: `memoryType` filters the
+  // memories branch only, so the ambient/gated distinction still holds.
+  //
+  // The episodic budget now also reads calendar_events. An event is episodic context by
+  // definition, and after Stage B it is the ONLY place events live — the old episodic
+  // memory row was a projection of a DynamoDB item that no longer exists.
   let hits;
   try {
     const [semantic, episodic] = await Promise.all([
-      recall(userMessage, { userId, topK: 2, memoryType: "semantic" }),  // preference budget
-      recall(userMessage, { userId, topK: 3, memoryType: "episodic" }),  // event budget
+      recallContext(userMessage, {
+        userId, kinds: ["memory"], memoryType: "semantic", perKind: 2, matchCount: 2,
+      }),
+      recallContext(userMessage, {
+        userId, kinds: ["memory", "calendar_event"], memoryType: "episodic", perKind: 3, matchCount: 3,
+      }),
     ]);
     // Fusion = concatenate. Each facet is already internally ranked by the composite
     // score, and the two sets never overlap (disjoint memory_type), so no dedup needed.
     // Preferences first: they set the standing context the events are then read against.
     hits = [...semantic, ...episodic];
     if (trace) trace.hits = hits;   // eval debug side-channel: expose the recalled set (no-op in prod)
+
+    // Emitted BEFORE the first token: a right-hand pane fills while the model thinks.
+    onEvent?.({ type: "context", hits: hits.map((h, rank) => ({ rank, ...h })) });
   } catch (retrievalError) {
-    // recall() already degrades gracefully on a DynamoDB outage, so reaching here
-    // means a HARD retrieval failure (e.g. Supabase/pgvector unreachable, bad RPC,
-    // embedding model failed to load) — the memory layer, not the LLM.
-    console.error("handleMessage(): RETRIEVAL failed (recall/Supabase/embedding):", retrievalError);
+    // A HARD retrieval failure — CockroachDB unreachable, bad function signature, or the
+    // embedding call failed. The memory layer, not the LLM.
+    console.error("answerQuestion(): RETRIEVAL failed (match_context/embedding):", retrievalError);
+    await finishRun(run?.id, {
+      status: "error", error: "RETRIEVAL", latencyMs: Date.now() - startedAt, intent,
+    });
+    onEvent?.({ type: "error", domain: "RETRIEVAL", message: retrievalError.message });
     throw retrievalError; // re-throw: the HTTP route maps this to a 500.
   }
 
@@ -358,20 +409,45 @@ export async function handleMessage(userMessage, userId, trace = null, createdAt
       : `You are a helpful planning assistant.`;
 
     // Tool loop replaces the single messages.create() that used to live here.
-    return await runToolTurn({
+    const { text, toolCalls, usage } = await runToolTurn({
       anthropic,
       model: TOOL_MODEL,
       system,
       userMessage,
       trace,
-      ctx,
+      onEvent,
+      // runId lets propose_calendar_change attach its row to this turn; onProposal lets it
+      // reach the stream without the loop knowing what a proposal is.
+      ctx: { ...ctx, userId, runId: run?.id ?? null,
+             onProposal: (row) => onEvent?.({ type: "proposal", ...row }) },
     });
+
+    // Ledger last, and NOT awaited by the caller's clock — the answer is already correct.
+    const record = finishRun(run?.id, {
+      status: "ok",
+      latencyMs: Date.now() - startedAt,
+      tokensIn: usage.input,
+      tokensOut: usage.output,
+      intent,
+      toolCalls,
+      hits: hits.map((h, rank) => ({
+        rank, kind: h.kind, entity_id: h.id,
+        distance: h.distance, relevance: h.relevance,
+        recency: h.recency, frequency: h.frequency, score: h.score,
+      })),
+    });
+
+    return { text, runId: run?.id ?? null, hits, toolCalls, usage, record };
   } catch (llmError) {
     // ── Stage 2: GENERATION (Anthropic Messages API) ──
     // Reaching here means retrieval already succeeded, so this is genuinely the LLM
     // call: a bad/missing ANTHROPIC_API_KEY, a wrong base URL, rate limiting, or a
     // network failure reaching api.anthropic.com.
-    console.error("handleMessage(): GENERATION failed (anthropic.messages.create):", llmError);
+    console.error("answerQuestion(): GENERATION failed (anthropic.messages.create):", llmError);
+    await finishRun(run?.id, {
+      status: "error", error: "GENERATION", latencyMs: Date.now() - startedAt, intent,
+    });
+    onEvent?.({ type: "error", domain: "GENERATION", message: llmError.message });
     throw llmError; // re-throw: let the caller (the HTTP route) decide the response.
   }
 }
